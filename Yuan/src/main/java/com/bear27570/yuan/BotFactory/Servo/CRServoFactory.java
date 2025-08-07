@@ -4,6 +4,7 @@ import androidx.annotation.NonNull;
 
 import com.bear27570.yuan.BotFactory.Action;
 import com.bear27570.yuan.BotFactory.ConfigDirectionPair;
+import com.bear27570.yuan.BotFactory.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.SwitcherPair;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.HardwareMap;
@@ -16,11 +17,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class  CRServoFactory {
+public class  CRServoFactory implements RunnableStructUnit {
     private final ArrayList<CRServo> ControlServo= new ArrayList<>();
     private final int ServoNum;
     private final ArrayList<ConfigDirectionPair> Config;
-    private final Map<Action, Double> ServoAction;
+    private final HashMap<Action, Double> ServoAction;
     private final SwitcherPair switcher;
     protected static HardwareMap hardwareMap;
     private Action ServoState = Init;
@@ -28,7 +29,7 @@ public class  CRServoFactory {
     private CRServoFactory(@NonNull ServoBuilder Builder){
         ServoNum=Builder.servoName.size();
         hardwareMap = Builder.hardwareMap;
-        this.ServoAction = Collections.unmodifiableMap(new HashMap<>(Builder.actionMap));
+        this.ServoAction = new HashMap<>(Builder.actionMap);
         Config = new ArrayList<>(Builder.servoName);
         for(int i = 0;i < ServoNum;i++){
             ControlServo.add(hardwareMap.get(CRServo.class,Config.get(i).getConfig()));
@@ -79,6 +80,9 @@ public class  CRServoFactory {
     }
     public Action getState(){
         return ServoState;
+    }
+    public HashMap<Action,Double> getNameList(){
+        return ServoAction;
     }
     public String getConfig(int i){
         if(i>=ServoNum){

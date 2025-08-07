@@ -4,6 +4,7 @@ import androidx.annotation.NonNull;
 
 import com.bear27570.yuan.BotFactory.Action;
 import com.bear27570.yuan.BotFactory.ConfigDirectionPair;
+import com.bear27570.yuan.BotFactory.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.SwitcherPair;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -17,11 +18,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class  MotorFactory {
+public class  MotorFactory implements RunnableStructUnit {
     private final ArrayList<DcMotorEx> ControlMotor= new ArrayList<>();
     private final int MotorNum;
     private final ArrayList<ConfigDirectionPair> Config;
-    private final Map<Action, Integer> MotorAction;
+    private final HashMap<Action, Integer> MotorAction;
     protected static HardwareMap hardwareMap;
     private final Map<Action,Action> SwitcherLink;
     private Action MotorState = Init;
@@ -30,7 +31,7 @@ public class  MotorFactory {
     public MotorFactory(@NonNull MotorBuilder Builder){
         MotorNum=Builder.MotorName.size();
         hardwareMap = Builder.hardwareMap;
-        this.MotorAction = Collections.unmodifiableMap(new HashMap<>(Builder.actionMap));
+        this.MotorAction = new HashMap<>(Builder.actionMap);
         Config = new ArrayList<>(Builder.MotorName);
         for(int i = 0;i < MotorNum;i++){
             ControlMotor.add(hardwareMap.get(DcMotorEx.class,Config.get(i).getConfig()));
@@ -50,6 +51,7 @@ public class  MotorFactory {
         }
         MotorState = Init;
     }
+    @Override
     public void act(Action thisAction){
         if(!MotorAction.containsKey(thisAction)) {
             throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
@@ -111,6 +113,9 @@ public class  MotorFactory {
     }
     public Action getState(){
         return MotorState;
+    }
+    public HashMap<Action,Integer> getNameList(){
+        return MotorAction;
     }
     public String getConfig(int i){
         if(i>=MotorNum){
