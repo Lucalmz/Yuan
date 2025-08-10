@@ -10,11 +10,11 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
 import static com.bear27570.yuan.BotFactory.Action.*;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -48,6 +48,12 @@ public class  MotorFactory implements RunnableStructUnit {
             ControlMotor.get(i).setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
             ControlMotor.get(i).setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
             ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            if(Config.get(i).isPosPIDFSet()){
+                ControlMotor.get(i).setPIDFCoefficients(DcMotor.RunMode.RUN_TO_POSITION,Config.get(i).getPosPIDF());
+            }
+            if(Config.get(i).isVelPIDFSet()){
+                ControlMotor.get(i).setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,Config.get(i).getVelPIDF());
+            }
         }
         MotorState = Init;
     }
@@ -130,12 +136,12 @@ public class  MotorFactory implements RunnableStructUnit {
         return Config.get(i).isReverse();
     }
     public static class MotorBuilder {
-        private final ArrayList<ConfigDirectionPair> MotorName = new ArrayList<>();
-        private final Map<Action, Integer> actionMap;
+        private ArrayList<ConfigDirectionPair> MotorName = new ArrayList<>();
+        private Map<Action, Integer> actionMap;
         private final HardwareMap hardwareMap;
         private SwitcherPair switcher;
         private Map<Action,Action> switcherLinkArrayList;
-        private boolean isSwitcherSet;
+        private boolean isSwitcherSet,isSinglePIDFSet;
         public MotorBuilder(String ConfigName1,int InitPosition,boolean isReverse,HardwareMap hardwareMap) {
             this.MotorName.add(new ConfigDirectionPair(ConfigName1,isReverse));
             this.actionMap = new HashMap<>();
@@ -154,7 +160,19 @@ public class  MotorFactory implements RunnableStructUnit {
             MotorName.add(new ConfigDirectionPair(newConfigName,isReverse));
             return this;
         }
+        public MotorBuilder addMotorWithPosPIDF(String newConfigName,boolean isReverse,PIDFCoefficients PosPIDF){
+            MotorName.add(new ConfigDirectionPair(newConfigName,isReverse,PosPIDF,null));
+            return this;
+        }
+        public MotorBuilder addMotorWithVelPIDF(String newConfigName,boolean isReverse,PIDFCoefficients VelPIDF){
+            MotorName.add(new ConfigDirectionPair(newConfigName,isReverse,null,VelPIDF));
+            return this;
+        }
 
+        public MotorBuilder addMotorWithPIDF(String newConfigName,boolean isReverse,PIDFCoefficients PosPIDF,PIDFCoefficients VelPIDF){
+            MotorName.add(new ConfigDirectionPair(newConfigName,isReverse,PosPIDF,VelPIDF));
+            return this;
+        }
         /**
          * 添加一个动作及其对应的Motor位置。
          *
@@ -166,7 +184,6 @@ public class  MotorFactory implements RunnableStructUnit {
             actionMap.put(actionType, position);
             return this;
         }
-
         /**
          * 设置电机switch方法（只能调用一遍）
          * @param switch1 设置第一个switch动作（所有其他位置时调用switch都会切到该位置）

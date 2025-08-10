@@ -1,8 +1,7 @@
 package com.bear27570.yuan.BotFactory.Gamepad;
 
 import com.qualcomm.robotcore.util.ElapsedTime;
-
-public class GamepadValue {
+class GamepadValue {
     private double nowPosition,lastPosition;
     private ElapsedTime PressTimer = new ElapsedTime();
     private GamepadValue (){
@@ -10,7 +9,7 @@ public class GamepadValue {
         lastPosition = 0;
         PressTimer.reset();
     }
-    public static GamepadValue initValue(){
+    protected static GamepadValue initValue(){
         return new GamepadValue();
     }
     public void update(double currentValue){

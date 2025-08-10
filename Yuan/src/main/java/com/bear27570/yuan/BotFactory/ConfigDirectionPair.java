@@ -1,26 +1,41 @@
 package com.bear27570.yuan.BotFactory;
 
-public class ConfigDirectionPair {
-    private String Config;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
-    private boolean isReverse;
-    public ConfigDirectionPair(String Config,boolean isReverse){
+public class ConfigDirectionPair {
+    private final String Config;
+    private final PIDFCoefficients PosPIDF;
+    private final PIDFCoefficients VelPIDF;
+    private final boolean isReverse;
+    public ConfigDirectionPair(String Config,boolean isReverse) {
         this.Config = Config;
         this.isReverse = isReverse;
+        this.PosPIDF = null;
+        this.VelPIDF = null;
+    }
+    public ConfigDirectionPair(String Config,boolean isReverse,PIDFCoefficients PosPIDF,PIDFCoefficients VelPIDF) {
+        this.Config = Config;
+        this.isReverse = isReverse;
+        this.PosPIDF = PosPIDF;
+        this.VelPIDF = VelPIDF;
     }
     public String getConfig() {
         return Config;
     }
 
-    public void setConfig(String config) {
-        Config = config;
-    }
     public boolean isReverse() {
         return isReverse;
     }
-
-    public void setReverse(boolean reverse) {
-        isReverse = reverse;
+    public PIDFCoefficients getPosPIDF(){
+        return PosPIDF;
     }
-
+    public PIDFCoefficients getVelPIDF(){
+        return VelPIDF;
+    }
+    public boolean isPosPIDFSet(){
+        return !(PosPIDF==null);
+    }
+    public boolean isVelPIDFSet(){
+        return !(VelPIDF==null);
+    }
 }

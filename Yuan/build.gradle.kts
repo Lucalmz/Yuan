@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "io.github.bear27570"
-version = "1.0.0"
+version = "1.0.1"
 
 android {
     namespace = "com.bear27570.yuan"
@@ -30,8 +30,8 @@ mavenPublishing {
         url.set("https://github.com/bear27570/Yuan-main")
         licenses {
             license {
-                name.set("The Apache Software License, Version 2.0")
-                url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                name.set("GNU General Public License, Version 3.0")
+                url.set("https://www.gnu.org/licenses/gpl-3.0.txt")
                 distribution.set("repo")
             }
         }

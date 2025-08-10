@@ -2,7 +2,7 @@ package com.bear27570.yuan.BotFactory.Gamepad;
 
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-public class GamepadButton {
+class GamepadButton {
     private ElapsedTime ButtonTimer = new ElapsedTime();
     private boolean nowPressed,previousPressed;
     private GamepadButton(){
@@ -10,7 +10,7 @@ public class GamepadButton {
         previousPressed = false;
         ButtonTimer.reset();
     }
-    public static GamepadButton initButton(){
+    protected static GamepadButton initButton(){
         return new GamepadButton();
     }
     public void update(boolean CurrentState){
