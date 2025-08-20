@@ -2,7 +2,7 @@ package com.bear27570.yuan.BotFactory.Gamepad;
 
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-class GamepadButton {
+public class GamepadButton {
     private ElapsedTime ButtonTimer = new ElapsedTime();
     private boolean nowPressed,previousPressed;
     private GamepadButton(){

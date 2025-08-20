@@ -24,6 +24,7 @@ public class  ServoFactory implements RunnableStructUnit {
     private final SwitcherPair switcher;
     protected static HardwareMap hardwareMap;
     private Action ServoState = Init;
+    private final Action InitState;
     private boolean isSwitcherAssigned = false;
     private ServoFactory(@NonNull ServoBuilder Builder){
         ServoNum=Builder.servoName.size();
@@ -37,13 +38,14 @@ public class  ServoFactory implements RunnableStructUnit {
             }
         }
         isSwitcherAssigned = Builder.isSwitcherSet;
+        InitState = Builder.InitState;
         switcher = Builder.switcher;
     }
     public void Init(){
         for(int i = 0;i < ServoNum; i++){
-            ControlServo.get(i).setPosition(ServoAction.get(Init));
+            act(InitState);
         }
-        ServoState = Init;
+        ServoState = InitState;
     }
     public void SetTemporaryPosition(double TemporaryPosition){
         for(int i = 0;i < ServoNum; i++){
@@ -100,11 +102,20 @@ public class  ServoFactory implements RunnableStructUnit {
         private final Map<Action, Double> actionMap;
         private final HardwareMap hardwareMap;
         private SwitcherPair switcher;
+        private final Action InitState;
         private boolean isSwitcherSet;
         public ServoBuilder(String ConfigName1,double InitPosition,boolean isReverse,HardwareMap hardwareMap) {
             this.servoName.add(new ConfigDirectionPair(ConfigName1, isReverse));
             this.actionMap = new HashMap<>();
             this.actionMap.put(Init, InitPosition);
+            this.InitState = Init;
+            this.hardwareMap = hardwareMap;
+        }
+        public ServoBuilder(String ConfigName1,Action InitAct,double InitPosition,boolean isReverse,HardwareMap hardwareMap) {
+            this.servoName.add(new ConfigDirectionPair(ConfigName1, isReverse));
+            this.actionMap = new HashMap<>();
+            this.actionMap.put(InitAct, InitPosition);
+            this.InitState = InitAct;
             this.hardwareMap = hardwareMap;
         }
         /**

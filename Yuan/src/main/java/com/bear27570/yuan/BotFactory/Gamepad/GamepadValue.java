@@ -1,7 +1,7 @@
 package com.bear27570.yuan.BotFactory.Gamepad;
 
 import com.qualcomm.robotcore.util.ElapsedTime;
-class GamepadValue {
+public class GamepadValue {
     private double nowPosition,lastPosition;
     private ElapsedTime PressTimer = new ElapsedTime();
     private GamepadValue (){
@@ -24,7 +24,7 @@ class GamepadValue {
     public double PressPosition(){
         return nowPosition;
     }
-    public boolean justPressed(){
+    public boolean justStartUsed(){
         return nowPosition!=0&&lastPosition==0;
     }
     public boolean justReleased(){

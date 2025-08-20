@@ -26,6 +26,7 @@ public class  MotorFactory implements RunnableStructUnit {
     protected static HardwareMap hardwareMap;
     private final Map<Action,Action> SwitcherLink;
     private Action MotorState = Init;
+    private final Action InitState;
     private final SwitcherPair switcher;
     private final boolean isSwitcherAssigned;
     public MotorFactory(@NonNull MotorBuilder Builder){
@@ -41,6 +42,7 @@ public class  MotorFactory implements RunnableStructUnit {
         }
         SwitcherLink = Builder.switcherLinkArrayList;
         isSwitcherAssigned = Builder.isSwitcherSet;
+        InitState = Builder.InitState;
         switcher = Builder.switcher;
     }
     public void Init(){
@@ -55,7 +57,7 @@ public class  MotorFactory implements RunnableStructUnit {
                 ControlMotor.get(i).setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,Config.get(i).getVelPIDF());
             }
         }
-        MotorState = Init;
+        MotorState = InitState;
     }
     @Override
     public void act(Action thisAction){
@@ -141,14 +143,22 @@ public class  MotorFactory implements RunnableStructUnit {
         private final HardwareMap hardwareMap;
         private SwitcherPair switcher;
         private Map<Action,Action> switcherLinkArrayList;
+        private final Action InitState;
         private boolean isSwitcherSet,isSinglePIDFSet;
         public MotorBuilder(String ConfigName1,int InitPosition,boolean isReverse,HardwareMap hardwareMap) {
             this.MotorName.add(new ConfigDirectionPair(ConfigName1,isReverse));
             this.actionMap = new HashMap<>();
             this.actionMap.put(Init,InitPosition);
+            this.InitState = Init;
             this.hardwareMap = hardwareMap;
         }
-
+        public MotorBuilder(String ConfigName1,Action InitAct,int InitPosition,boolean isReverse,HardwareMap hardwareMap) {
+            this.MotorName.add(new ConfigDirectionPair(ConfigName1, isReverse));
+            this.actionMap = new HashMap<>();
+            this.actionMap.put(InitAct, InitPosition);
+            this.InitState = InitAct;
+            this.hardwareMap = hardwareMap;
+        }
         /**
          *给这个封装添加一个新的同步电机
          *
