@@ -16,7 +16,31 @@ import com.bear27570.yuan.BotFactory.SwitcherPair;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.locks.ReentrantLock;
-
+/*
+ *                        _oo0oo_
+ *                       o8888888o
+ *                       88" . "88
+ *                       (| -_- |)
+ *                       0\  =  /0
+ *                     ___/`---'\___
+ *                   .' \\|     |// '.
+ *                  / \\|||  :  |||// \
+ *                 / _||||| -:- |||||- \
+ *                |   | \\\  - /// |   |
+ *                | \_|  ''\---/''  |_/ |
+ *                \  .-\__  '-'  ___/-. /
+ *              ___'. .'  /--.--\  `. .'___
+ *           ."" '<  `.___\_<|>_/___.' >' "".
+ *          | | :  `- \`.;`\ _ /`;.`/ - ` : | |
+ *          \  \ `_.   \_ __\ /__ _/   .-` /  /
+ *      =====`-.____`.___ \_____/___.-`___.-'=====
+ *                        `=---='
+ *
+ *
+ *      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *
+ *            佛祖保佑       永不宕机     永无BUG
+ */
 public class StructureGroup implements LockableUnit {
     private final ArrayList<ServoFactory> Servos;
     private final ArrayList<MotorFactory> Motors;
@@ -56,6 +80,9 @@ public class StructureGroup implements LockableUnit {
             Structures.get(i).lockAllSubsystems();
         }
     }
+    /**
+     * 释放所有子系统的锁
+     */
     public void unLockAllSubsystems(){
         for (int i = 0; i < ServoNum; i++) {
             Servos.get(i).lock.unlock();

@@ -16,7 +16,31 @@ import com.bear27570.yuan.BotFactory.SwitcherPair;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.locks.ReentrantLock;
-
+/*
+ *                        _oo0oo_
+ *                       o8888888o
+ *                       88" . "88
+ *                       (| -_- |)
+ *                       0\  =  /0
+ *                     ___/`---'\___
+ *                   .' \\|     |// '.
+ *                  / \\|||  :  |||// \
+ *                 / _||||| -:- |||||- \
+ *                |   | \\\  - /// |   |
+ *                | \_|  ''\---/''  |_/ |
+ *                \  .-\__  '-'  ___/-. /
+ *              ___'. .'  /--.--\  `. .'___
+ *           ."" '<  `.___\_<|>_/___.' >' "".
+ *          | | :  `- \`.;`\ _ /`;.`/ - ` : | |
+ *          \  \ `_.   \_ __\ /__ _/   .-` /  /
+ *      =====`-.____`.___ \_____/___.-`___.-'=====
+ *                        `=---='
+ *
+ *
+ *      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *
+ *            佛祖保佑       永不宕机     永无BUG
+ */
 public class StructureLink implements LockableUnit {
     private final ArrayList<ServoFactory> StructureServo;
     private final ArrayList<MotorFactory> StructureMotor;
@@ -81,7 +105,7 @@ public class StructureLink implements LockableUnit {
         lockAllSubsystems();
     }
     /**
-     * 将所有子系统上锁
+     * 将所有直系子系统上锁
      **/
     public void lockAllSubsystems(){
         for (int i = 0; i < ServoNum; i++) {
@@ -113,6 +137,10 @@ public class StructureLink implements LockableUnit {
         }
         unLockAllSubsystems();
     }
+
+    /**
+     * 释放所有直系子系统的锁
+     */
     public void unLockAllSubsystems(){
         for (int i = 0; i < ServoNum; i++) {
             StructureServo.get(i).lock.unlock();
