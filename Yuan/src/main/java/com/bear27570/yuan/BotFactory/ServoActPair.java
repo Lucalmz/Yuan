@@ -1,7 +1,9 @@
 package com.bear27570.yuan.BotFactory;
 
 import com.bear27570.yuan.BotFactory.Servo.ServoFactory;
-
+/**
+ * 舵机和动作的共同封装类，用于safety check
+ */
 public class ServoActPair {
     private final ServoFactory servo;
     private final Action thisAct;

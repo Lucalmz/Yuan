@@ -1,7 +1,9 @@
 package com.bear27570.yuan.BotFactory;
 
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
-
+/**
+ * 记录Config和是否反向的共同封装类，用于设置反向
+ */
 public class ConfigDirectionPair {
     private final String Config;
     private final PIDFCoefficients PosPIDF;

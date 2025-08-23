@@ -1,5 +1,7 @@
 package com.bear27570.yuan.BotFactory;
-
+/**
+ * Action类型，用于存储所有可能的动作名称，每赛季更新
+ */
 public enum Action {
     Open,Close,LaxClose,OpenMore,Shut,Fold,Seal,Narrow,NearlyOpen,Transfer,BeforeTransfer,AfterTransfer,
     Up,Down,SlideOut,SlideIn,LiftUp,LiftDown,LeftTurned,RightTurned,Elevate,Ascend,Decened,Depress,ChamberUp,Chamber,

@@ -6,6 +6,9 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.jetbrains.annotations.Contract;
 
+/**
+ * 增强的Gamepad，支持附加线程，支持边缘检测和摇杆速度获取
+ */
 public class GamepadEx{
     public final Gamepad gamepad;
     public final GamepadButton cross;
@@ -68,11 +71,21 @@ public class GamepadEx{
         touchpad_finger_2_x = GamepadValue.initValue();
         touchpad_finger_2_y = GamepadValue.initValue();
     }
+
+    /**
+     * GamepadEx静态工厂
+     * @param gamepad 对应的原生gamepad
+     * @return 返回GamepadEx实例
+     */
     @NonNull
     @Contract(value = "_ -> new", pure = true)
     public static GamepadEx GetGamepadEx(Gamepad gamepad){
         return new GamepadEx(gamepad);
     }
+
+    /**
+     * 根据传入的Gamepad更新按键
+     */
     public void update(){
         circle.update(gamepad.circle);
         cross.update(gamepad.cross);

@@ -16,7 +16,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
+import java.util.concurrent.locks.ReentrantLock;
+/**
+ * 线程安全的CR舵机封装类，使用了ReentrantLock
+ * @author LucaLi
+ */
 public class  CRServoFactory implements RunnableStructUnit {
     private final ArrayList<CRServo> ControlServo= new ArrayList<>();
     private final int ServoNum;
@@ -24,8 +28,9 @@ public class  CRServoFactory implements RunnableStructUnit {
     private final HashMap<Action, Double> ServoAction;
     private final SwitcherPair switcher;
     protected static HardwareMap hardwareMap;
-    private Action ServoState = Init;
+    private volatile Action ServoState = Init;
     private final Action InitState;
+    public ReentrantLock lock = new ReentrantLock();
     private boolean isSwitcherAssigned = false;
     private CRServoFactory(@NonNull ServoBuilder Builder){
         ServoNum=Builder.servoName.size();
@@ -42,62 +47,116 @@ public class  CRServoFactory implements RunnableStructUnit {
         InitState = Builder.InitState;
         switcher = Builder.switcher;
     }
+    /**
+     * 初始化舵机位置操作
+     */
+    @Override
     public void Init(){
         for(int i = 0;i < ServoNum; i++){
             act(InitState);
         }
         ServoState = InitState;
     }
+    /**
+     * 为视觉这类需要瞄准的提供的方法，能够让舵机在线程安全的情况下到达任意未指定的位置
+     * @param TemporaryPosition 舵机需要执行的位置
+     */
     public void SetTemporaryPosition(double TemporaryPosition){
-        for(int i = 0;i < ServoNum; i++){
-            ControlServo.get(i).setPower(TemporaryPosition);
+        lock.lock();
+        try {
+            for (int i = 0; i < ServoNum; i++) {
+                ControlServo.get(i).setPower(TemporaryPosition);
+            }
+            ServoState = InTemporary;
+        }finally {
+            lock.unlock();
         }
-        ServoState = InTemporary;
     }
+    /**
+     *支持线程安全的动作，使用了ReentrantLock，能够保证动作不被意外打断
+     * 所有记录过的舵机动作的入口
+     * @param thisAction 当前需要执行的Action类动作名称
+     */
+    @Override
     public void act(Action thisAction){
         if(!ServoAction.containsKey(thisAction)) {
             throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
         }
-        for (int i = 0; i < ServoNum; i++) {
-            ControlServo.get(i).setPower(ServoAction.get(thisAction));
+        lock.lock();
+        try {
+            for (int i = 0; i < ServoNum; i++) {
+                ControlServo.get(i).setPower(ServoAction.get(thisAction));
+            }
+            ServoState = thisAction;
+        }finally {
+            lock.unlock();
         }
-        ServoState=thisAction;
     }
+    /**
+     * Switch方法，可以让该舵机在规定的两个状态间切换，若都不在，！会执行到定义的Switch1的状态！
+     */
+    @Override
     public void Switch(){
         if(isSwitcherAssigned){
-            if(ServoState==switcher.getSwitch1()){
-                for (int i = 0; i < ServoNum; i++) {
-                    ControlServo.get(i).setPower(ServoAction.get(switcher.getSwitch2()));
+            Action requestState = ServoState;
+            lock.lock();
+            try {
+                if(requestState!=ServoState){
+                    return;
                 }
-                ServoState = switcher.getSwitch2();
-            }else {
-                for (int i = 0; i < ServoNum; i++) {
-                    ControlServo.get(i).setPower(ServoAction.get(switcher.getSwitch1()));
+                if (ServoState == switcher.getSwitch1()) {
+                    act(switcher.getSwitch2());
+                } else {
+                    act(switcher.getSwitch1());
                 }
-                ServoState = switcher.getSwitch1();
+            }finally {
+                lock.unlock();
             }
         }else {
             throw new IllegalArgumentException("You haven't assigned a switcher for this servo.");
         }
     }
+    /**
+     * 获取当前舵机动作状态
+     * @return Action类型当前动作状态
+     */
+    @Override
     public Action getState(){
         return ServoState;
     }
+    /**
+     * 获取名称和对应数的HashMap（自己去查啊！）
+     * @return Hashmap<Action,Double>
+     */
     public HashMap<Action,Double> getNameList(){
         return ServoAction;
     }
+    /**
+     * 获取第i颗舵机的Config名称，i<n（真的会有人用这个吗？）
+     * @param i 第几颗舵机
+     * @return 所查询的舵机的Config名称
+     */
+    @Override
     public String getConfig(int i){
         if(i>=ServoNum){
             throw new ArrayIndexOutOfBoundsException("Are you kidding me? I can't tell you a fucking servo name more than"+(ServoNum-1)+", but you asked me to tell you the "+i+"one!");
         }
         return Config.get(i).getConfig();
     }
+    /**
+     * 获取第i颗舵机是否被设置反向（i<n）
+     * @param i 第几颗舵机
+     * @return 返回是否被设置反向
+     */
     public boolean whichIsReversed(int i){
         if(i>=ServoNum){
             throw new ArrayIndexOutOfBoundsException("Are you fucking kidding me? I can't tell you a fucking servo whether it is reversed more than"+(ServoNum-1)+", but you asked me to tell you the "+i+"one!");
         }
         return Config.get(i).isReverse();
     }
+    /**
+     * 使用了Builder构型，链式调用满足不定项输入需求
+     */
     public static class ServoBuilder {
         private final ArrayList<ConfigDirectionPair> servoName = new ArrayList<>();
         private final Map<Action, Double> actionMap;

@@ -1,5 +1,7 @@
 package com.bear27570.yuan.BotFactory;
-
+/**
+ * 两个动作的共同封装类，用于switch方法
+ */
 public class SwitcherPair {
     public Action getSwitch1() {
         return switch1;

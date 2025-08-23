@@ -1,7 +1,9 @@
 package com.bear27570.yuan.BotFactory;
 
 import com.bear27570.yuan.BotFactory.Motor.MotorFactory;
-
+/**
+ * DC电机和动作的共同封装类，用于safety check
+ */
 public class MotorActPair {
     private final MotorFactory Motor;
     private final Action thisAct;
