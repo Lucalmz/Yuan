@@ -5,6 +5,7 @@ import androidx.annotation.NonNull;
 import com.bear27570.yuan.BotFactory.Action;
 import com.bear27570.yuan.BotFactory.ConfigDirectionPair;
 import com.bear27570.yuan.BotFactory.RunnableStructUnit;
+import com.bear27570.yuan.BotFactory.Services.TimeServices;
 import com.bear27570.yuan.BotFactory.SwitcherPair;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
@@ -12,9 +13,9 @@ import com.qualcomm.robotcore.hardware.Servo;
 import static com.bear27570.yuan.BotFactory.Action.*;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -30,6 +31,9 @@ public class  ServoFactory implements RunnableStructUnit {
     protected static HardwareMap hardwareMap;
     private volatile Action ServoState = Init;
     private final Action InitState;
+    private final Boolean IsPatienceAvailable;
+    private long thisActionWaitingSec;
+    private final Double ServoVel;
     public ReentrantLock lock = new ReentrantLock();
     private boolean isSwitcherAssigned = false;
 
@@ -48,9 +52,11 @@ public class  ServoFactory implements RunnableStructUnit {
                 ControlServo.get(i).setDirection(Servo.Direction.REVERSE);
             }
         }
-        isSwitcherAssigned = Builder.isSwitcherSet;
-        InitState = Builder.InitState;
-        switcher = Builder.switcher;
+        this.isSwitcherAssigned = Builder.isSwitcherSet;
+        this.InitState = Builder.InitState;
+        this.switcher = Builder.switcher;
+        this.IsPatienceAvailable = Builder.isPatienceAvailable;
+        ServoVel = Builder.ServoVel;
     }
 
     /**
@@ -96,6 +102,7 @@ public class  ServoFactory implements RunnableStructUnit {
             for (int i = 0; i < ServoNum; i++) {
                 ControlServo.get(i).setPosition(ServoAction.get(thisAction));
             }
+            thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction,this);
             ServoState = thisAction;
         }finally {
             lock.unlock();
@@ -103,24 +110,54 @@ public class  ServoFactory implements RunnableStructUnit {
     }
 
     /**
+     * 自带线程阻塞的执行动作
+     * @param thisAction 当前目标动作
+     * @throws InterruptedException 阻塞可以被打断
+     */
+    public void PatientAct(Action thisAction) throws InterruptedException {
+        if(!IsPatienceAvailable){
+            throw new IllegalArgumentException("You can't use patient act because you haven't registered your servo's velocity");
+        }
+        if(!ServoAction.containsKey(thisAction)) {
+            throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
+        }
+        //给动作上锁，以免导致线程抢舵机
+        lock.lock();
+        try {
+            for (int i = 0; i < ServoNum; i++) {
+                ControlServo.get(i).setPosition(ServoAction.get(thisAction));
+            }
+            thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction,this);
+            TimeUnit.MILLISECONDS.sleep(thisActionWaitingSec);
+            ServoState = thisAction;
+        }finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 获取当前动作需要等待的时间
+     */
+    public long WaitMillSec(){
+        return thisActionWaitingSec;
+    }
+    /**
      * Switch方法，可以让该舵机在规定的两个状态间切换，若都不在，！会执行到定义的Switch1的状态！
      */
     @Override
     public void Switch(){
         if(isSwitcherAssigned){
             Action requestState = ServoState;
-            lock.lock();
-            try {
-                if(requestState!=ServoState){
-                    return;
+            if(lock.tryLock()) {
+                try {
+                    if (ServoState == switcher.getSwitch1()) {
+                        act(switcher.getSwitch2());
+                    } else {
+                        act(switcher.getSwitch1());
+                    }
+                } finally {
+                    lock.unlock();
                 }
-                if (ServoState == switcher.getSwitch1()) {
-                    act(switcher.getSwitch2());
-                } else {
-                    act(switcher.getSwitch1());
-                }
-            }finally {
-                lock.unlock();
             }
             return;
         }
@@ -158,6 +195,22 @@ public class  ServoFactory implements RunnableStructUnit {
     }
 
     /**
+     * 获取Action对应的位置
+     * @param target 需要获取的Action名称
+     * @return 舵机对应的位置
+     */
+    public Double getActionPosition(Action target){
+        return ServoAction.get(target);
+    }
+
+    /**
+     * 获取舵机转速
+     * @return 舵机转速（Sec/60°）
+     */
+    public double getServoVel(){
+        return ServoVel;
+    }
+    /**
      * 获取第i颗舵机是否被设置反向（i<n）
      * @param i 第几颗舵机
      * @return 返回是否被设置反向
@@ -179,6 +232,9 @@ public class  ServoFactory implements RunnableStructUnit {
         private final HardwareMap hardwareMap;
         private SwitcherPair switcher;
         private final Action InitState;
+        private double ServoVel;
+        private int DegRange;
+        private boolean isPatienceAvailable;
         private boolean isSwitcherSet;
         public ServoBuilder(String ConfigName1,double InitPosition,boolean isReverse,HardwareMap hardwareMap) {
             this.servoName.add(new ConfigDirectionPair(ConfigName1, isReverse));
@@ -193,6 +249,19 @@ public class  ServoFactory implements RunnableStructUnit {
             this.actionMap.put(InitAct, InitPosition);
             this.InitState = InitAct;
             this.hardwareMap = hardwareMap;
+        }
+
+        /**
+         * 设置该舵机转速以用于自动等待方法
+         * @param SecPer60Deg 每60度需要几秒
+         * @param DegRange 舵机角度
+         * @return 当前Builder实例，实现链式调用
+         */
+        public ServoBuilder SetServoVelAndRange(double SecPer60Deg,int DegRange){
+            this.ServoVel = SecPer60Deg;
+            this.DegRange = DegRange;
+            this.isPatienceAvailable=true;
+            return this;
         }
         /**
          *给这个封装添加一个新的同步舵机

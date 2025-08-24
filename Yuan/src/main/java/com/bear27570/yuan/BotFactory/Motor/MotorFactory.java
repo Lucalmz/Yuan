@@ -110,6 +110,9 @@ public class  MotorFactory implements RunnableStructUnit {
             lock.unlock();
         }
     }
+    public void PatientAct(){
+
+    }
     /**
      * 直接设置功率
      * @param Power 功率

@@ -1,1 +1,0 @@
-packageSearchIndex = [{"l":"com.bear27570.yuan.BotFactory"},{"l":"com.bear27570.yuan.BotFactory.Gamepad"},{"l":"com.bear27570.yuan.BotFactory.Motor"},{"l":"com.bear27570.yuan.BotFactory.Servo"},{"l":"com.bear27570.yuan.BotFactory.Structure"},{"l":"所有程序包","u":"allpackages-index.html"}];updateSearchResults();
