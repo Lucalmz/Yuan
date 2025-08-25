@@ -1,7 +1,7 @@
 package com.bear27570.yuan.BotFactory.Services;
 
 import com.bear27570.yuan.BotFactory.Action;
-import com.bear27570.yuan.BotFactory.Servo.ServoFactory;
+import com.bear27570.yuan.BotFactory.Servo.ServoEx;
 
 /**
  * 提供计算时间相关的功能函数
@@ -13,7 +13,7 @@ public class TimeServices {
      * @param MoveServo 执行的舵机
      * @return 需要运行的时间 Unit:MillSecond
      */
-    public static long GetServoWaitMillSec(Action TargetState, ServoFactory MoveServo){
+    public static long GetServoWaitMillSec(Action TargetState, ServoEx MoveServo){
         double MovePosition = MoveServo.getActionPosition(MoveServo.getState())-MoveServo.getActionPosition(TargetState);
         return (long) (Math.abs(MovePosition)*MoveServo.getServoVel()*3*1000);
     }

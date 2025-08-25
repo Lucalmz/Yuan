@@ -6,7 +6,6 @@ import com.bear27570.yuan.BotFactory.Action;
 import com.bear27570.yuan.BotFactory.ConfigDirectionPair;
 import com.bear27570.yuan.BotFactory.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.SwitcherPair;
-import com.google.firebase.crashlytics.buildtools.reloc.com.google.common.collect.BiMap;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -23,7 +22,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * 线程安全的DC电机封装类，使用了ReentrantLock
  * @author LucaLi
  */
-public class  MotorFactory implements RunnableStructUnit {
+public class MotorEx implements RunnableStructUnit {
     private final ArrayList<DcMotorEx> ControlMotor= new ArrayList<>();
     private final int MotorNum;
     private final ArrayList<ConfigDirectionPair> Config;
@@ -38,7 +37,7 @@ public class  MotorFactory implements RunnableStructUnit {
      * 内部构造类
      * @param Builder 实现builder生成器架构
      */
-    public MotorFactory(@NonNull MotorBuilder Builder){
+    public MotorEx(@NonNull MotorBuilder Builder){
         MotorNum=Builder.MotorName.size();
         hardwareMap = Builder.hardwareMap;
         this.MotorAction = new HashMap<>(Builder.actionMap);
@@ -312,11 +311,11 @@ public class  MotorFactory implements RunnableStructUnit {
          *
          * @return 构建好的 ServoFactory 对象
          */
-        public MotorFactory build() {
+        public MotorEx build() {
             if(!isSwitcherSet){
                 switcher = SwitcherPair.GetSwitcherPair(null,null);
             }
-            return new MotorFactory(this);
+            return new MotorEx(this);
         }
     }
 }

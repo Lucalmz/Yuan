@@ -1,7 +1,6 @@
 package com.bear27570.yuan.BotFactory;
 
 import com.bear27570.yuan.BotFactory.Servo.CRServoFactory;
-import com.bear27570.yuan.BotFactory.Servo.ServoFactory;
 
 /**
  * CR舵机和动作的共同封装类，用于safety check

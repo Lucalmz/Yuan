@@ -1,13 +1,13 @@
 package com.bear27570.yuan.BotFactory;
 
-import com.bear27570.yuan.BotFactory.Servo.ServoFactory;
+import com.bear27570.yuan.BotFactory.Servo.ServoEx;
 /**
  * 舵机和动作的共同封装类，用于safety check
  */
 public class ServoActPair {
-    private final ServoFactory servo;
+    private final ServoEx servo;
     private final Action thisAct;
-    public ServoActPair(ServoFactory servo,Action thisAct){
+    public ServoActPair(ServoEx servo, Action thisAct){
         this.servo = servo;
         this.thisAct = thisAct;
     }
@@ -17,7 +17,7 @@ public class ServoActPair {
     public Action getRelevantAction(){
         return thisAct;
     }
-    public ServoFactory getServo(){
+    public ServoEx getServo(){
         return servo;
     }
 }

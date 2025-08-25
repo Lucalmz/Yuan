@@ -22,7 +22,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * 线程安全的舵机封装类，使用了ReentrantLock
  * @author LucaLi
  */
-public class  ServoFactory implements RunnableStructUnit {
+public class ServoEx implements RunnableStructUnit {
     private final ArrayList<Servo> ControlServo= new ArrayList<>();
     private final int ServoNum;
     private final ArrayList<ConfigDirectionPair> Config;
@@ -41,7 +41,7 @@ public class  ServoFactory implements RunnableStructUnit {
      * 内部构造类
      * @param Builder 实现builder生成器架构
      */
-    private ServoFactory(@NonNull ServoBuilder Builder){
+    private ServoEx(@NonNull ServoBuilder Builder){
         ServoNum=Builder.servoName.size();
         hardwareMap = Builder.hardwareMap;
         this.ServoAction = new HashMap<>(Builder.actionMap);
@@ -308,11 +308,11 @@ public class  ServoFactory implements RunnableStructUnit {
          * 构建并返回一个 ServoFactory 实例。
          * @return 构建好的 ServoFactory 对象
          */
-        public ServoFactory build() {
+        public ServoEx build() {
             if(!isSwitcherSet){
                 switcher = SwitcherPair.GetSwitcherPair(null,null);
             }
-            return new ServoFactory(this);
+            return new ServoEx(this);
         }
     }
 }

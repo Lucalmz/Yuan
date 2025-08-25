@@ -2,19 +2,12 @@ package com.bear27570.yuan.BotFactory.Structure;
 
 import androidx.annotation.NonNull;
 
-import com.bear27570.yuan.BotFactory.Action;
-import com.bear27570.yuan.BotFactory.CRServoActPair;
 import com.bear27570.yuan.BotFactory.LockableUnit;
-import com.bear27570.yuan.BotFactory.Motor.MotorFactory;
-import com.bear27570.yuan.BotFactory.MotorActPair;
+import com.bear27570.yuan.BotFactory.Motor.MotorEx;
 import com.bear27570.yuan.BotFactory.Servo.CRServoFactory;
-import com.bear27570.yuan.BotFactory.Servo.ServoFactory;
-import com.bear27570.yuan.BotFactory.ServoActPair;
-import com.bear27570.yuan.BotFactory.StructureActionPair;
-import com.bear27570.yuan.BotFactory.SwitcherPair;
+import com.bear27570.yuan.BotFactory.Servo.ServoEx;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.concurrent.locks.ReentrantLock;
 /*
  *                        _oo0oo_
@@ -42,8 +35,8 @@ import java.util.concurrent.locks.ReentrantLock;
  *            佛祖保佑       永不宕机     永无BUG
  */
 public class StructureGroup implements LockableUnit {
-    private final ArrayList<ServoFactory> Servos;
-    private final ArrayList<MotorFactory> Motors;
+    private final ArrayList<ServoEx> Servos;
+    private final ArrayList<MotorEx> Motors;
     private final ArrayList<CRServoFactory> CRServos;
     private final ArrayList<StructureLink> Structures;
     private final int ServoNum;
@@ -99,8 +92,8 @@ public class StructureGroup implements LockableUnit {
         }
     }
     public static class StructureBuilder {
-        private ArrayList<ServoFactory> Servos;
-        private ArrayList<MotorFactory> Motors;
+        private ArrayList<ServoEx> Servos;
+        private ArrayList<MotorEx> Motors;
         private ArrayList<CRServoFactory> CRServos;
         private ArrayList<StructureLink> Structures;
 
@@ -116,7 +109,7 @@ public class StructureGroup implements LockableUnit {
          * @param newServo 这个结构中的一个舵机
          * @return 当前Builder实例，实现链式调用
          */
-        public StructureBuilder add(ServoFactory newServo) {
+        public StructureBuilder add(ServoEx newServo) {
             this.Servos.add(newServo);
             return this;
         }
@@ -127,7 +120,7 @@ public class StructureGroup implements LockableUnit {
          * @param newMotor 这个结构中的一个电机
          * @return 当前Builder实例，实现链式调用
          */
-        public StructureBuilder add(MotorFactory newMotor) {
+        public StructureBuilder add(MotorEx newMotor) {
             this.Motors.add(newMotor);
             return this;
         }

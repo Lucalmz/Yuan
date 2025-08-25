@@ -5,10 +5,10 @@ import androidx.annotation.NonNull;
 import com.bear27570.yuan.BotFactory.Action;
 import com.bear27570.yuan.BotFactory.CRServoActPair;
 import com.bear27570.yuan.BotFactory.LockableUnit;
-import com.bear27570.yuan.BotFactory.Motor.MotorFactory;
+import com.bear27570.yuan.BotFactory.Motor.MotorEx;
 import com.bear27570.yuan.BotFactory.MotorActPair;
 import com.bear27570.yuan.BotFactory.Servo.CRServoFactory;
-import com.bear27570.yuan.BotFactory.Servo.ServoFactory;
+import com.bear27570.yuan.BotFactory.Servo.ServoEx;
 import com.bear27570.yuan.BotFactory.ServoActPair;
 import com.bear27570.yuan.BotFactory.StructureActionPair;
 import com.bear27570.yuan.BotFactory.SwitcherPair;
@@ -42,8 +42,8 @@ import java.util.concurrent.locks.ReentrantLock;
  *            佛祖保佑       永不宕机     永无BUG
  */
 public class StructureLink implements LockableUnit {
-    private final ArrayList<ServoFactory> StructureServo;
-    private final ArrayList<MotorFactory> StructureMotor;
+    private final ArrayList<ServoEx> StructureServo;
+    private final ArrayList<MotorEx> StructureMotor;
     private final ArrayList<CRServoFactory> StructureCRServo;
     private final ArrayList<Action> ActionList;
     private final HashMap<Action, ServoActPair> SafetyCheckServoList;
@@ -275,8 +275,8 @@ public class StructureLink implements LockableUnit {
     }
 
     public static class StructureBuilder {
-        private ArrayList<ServoFactory> Servo;
-        private ArrayList<MotorFactory> Motor;
+        private ArrayList<ServoEx> Servo;
+        private ArrayList<MotorEx> Motor;
         private ArrayList<CRServoFactory> CRServo;
         private ArrayList<Action> ActList;
         private HashMap<Action, ServoActPair> SafetyCheckServo;
@@ -309,7 +309,7 @@ public class StructureLink implements LockableUnit {
          * @param newServo 这个结构中的一个舵机
          * @return 当前Builder实例，实现链式调用
          */
-        public StructureBuilder add(ServoFactory newServo) {
+        public StructureBuilder add(ServoEx newServo) {
             this.Servo.add(newServo);
             return this;
         }
@@ -320,7 +320,7 @@ public class StructureLink implements LockableUnit {
          * @param newMotor 这个结构中的一个电机
          * @return 当前Builder实例，实现链式调用
          */
-        public StructureBuilder add(MotorFactory newMotor) {
+        public StructureBuilder add(MotorEx newMotor) {
             this.Motor.add(newMotor);
             return this;
         }
@@ -371,7 +371,7 @@ public class StructureLink implements LockableUnit {
          * @param SafeAct     该舵机需要的状态
          * @return 当前Builder实例，实现链式调用
          */
-        public StructureBuilder addStructActSafetyCheck(Action StructAct, ServoFactory AttachServo, Action SafeAct) {
+        public StructureBuilder addStructActSafetyCheck(Action StructAct, ServoEx AttachServo, Action SafeAct) {
             SafetyCheckServo.put(StructAct, new ServoActPair(AttachServo, SafeAct));
             return this;
         }
@@ -384,7 +384,7 @@ public class StructureLink implements LockableUnit {
          * @param SafeAct     该舵机需要的状态
          * @return 当前Builder实例，实现链式调用
          */
-        public StructureBuilder addStructActSafetyCheck(Action StructAct, MotorFactory AttachMotor, Action SafeAct) {
+        public StructureBuilder addStructActSafetyCheck(Action StructAct, MotorEx AttachMotor, Action SafeAct) {
             SafetyCheckMotor.put(StructAct, new MotorActPair(AttachMotor, SafeAct));
             return this;
         }
