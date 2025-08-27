@@ -1,5 +1,6 @@
-package com.bear27570.yuan.BotFactory;
+package com.bear27570.yuan.BotFactory.Model;
 
+import com.bear27570.yuan.BotFactory.Action;
 import com.bear27570.yuan.BotFactory.Structure.StructureLink;
 /**
  * 结构组和动作的共同封装类，用于safety check

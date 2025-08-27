@@ -3,10 +3,10 @@ package com.bear27570.yuan.BotFactory.Servo;
 import androidx.annotation.NonNull;
 
 import com.bear27570.yuan.BotFactory.Action;
-import com.bear27570.yuan.BotFactory.ConfigDirectionPair;
-import com.bear27570.yuan.BotFactory.RunnableStructUnit;
+import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
+import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.Services.TimeServices;
-import com.bear27570.yuan.BotFactory.SwitcherPair;
+import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 
@@ -34,9 +34,26 @@ public class ServoEx implements RunnableStructUnit {
     private final Boolean IsPatienceAvailable;
     private long thisActionWaitingSec;
     private final Double ServoVel;
-    public ReentrantLock lock = new ReentrantLock();
+    private final int DegRange;
+    private double ServoPosition;
+    private final ReentrantLock lock = new ReentrantLock();
     private boolean isSwitcherAssigned = false;
 
+    /**
+     * 提供公用上锁方法
+     */
+    @Override
+    public void lock(){
+        lock.lock();
+    }
+
+    /**
+     * 提供公用解锁方法
+     */
+    @Override
+    public void unlock(){
+        lock.unlock();
+    }
     /**
      * 内部构造类
      * @param Builder 实现builder生成器架构
@@ -56,7 +73,8 @@ public class ServoEx implements RunnableStructUnit {
         this.InitState = Builder.InitState;
         this.switcher = Builder.switcher;
         this.IsPatienceAvailable = Builder.isPatienceAvailable;
-        ServoVel = Builder.ServoVel;
+        this.ServoVel = Builder.ServoVel;
+        this.DegRange = Builder.DegRange;
     }
 
     /**
@@ -80,6 +98,7 @@ public class ServoEx implements RunnableStructUnit {
             for (int i = 0; i < ServoNum; i++) {
                 ControlServo.get(i).setPosition(TemporaryPosition);
             }
+            ServoPosition=TemporaryPosition;
             ServoState = InTemporary;
         }finally {
             lock.unlock();
@@ -200,9 +219,18 @@ public class ServoEx implements RunnableStructUnit {
      * @return 舵机对应的位置
      */
     public Double getActionPosition(Action target){
+        if(target== InTemporary){
+            return ServoPosition;
+        }
         return ServoAction.get(target);
     }
-
+    /**
+     * 获取舵机角度范围
+     * @return 角度范围 Unit:Degree
+     */
+    public int getDegRange(){
+        return DegRange;
+    }
     /**
      * 获取舵机转速
      * @return 舵机转速（Sec/60°）

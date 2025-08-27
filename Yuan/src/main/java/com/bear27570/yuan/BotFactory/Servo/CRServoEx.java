@@ -3,25 +3,25 @@ package com.bear27570.yuan.BotFactory.Servo;
 import androidx.annotation.NonNull;
 
 import com.bear27570.yuan.BotFactory.Action;
-import com.bear27570.yuan.BotFactory.ConfigDirectionPair;
-import com.bear27570.yuan.BotFactory.RunnableStructUnit;
-import com.bear27570.yuan.BotFactory.SwitcherPair;
+import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
+import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
+import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
+import com.bear27570.yuan.BotFactory.Services.TimeServices;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.HardwareMap;
-import com.qualcomm.robotcore.hardware.Servo;
 
 import static com.bear27570.yuan.BotFactory.Action.*;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 /**
  * 线程安全的CR舵机封装类，使用了ReentrantLock
  * @author LucaLi
  */
-public class  CRServoFactory implements RunnableStructUnit {
+public class CRServoEx implements RunnableStructUnit {
     private final ArrayList<CRServo> ControlServo= new ArrayList<>();
     private final int ServoNum;
     private final ArrayList<ConfigDirectionPair> Config;
@@ -30,9 +30,21 @@ public class  CRServoFactory implements RunnableStructUnit {
     protected static HardwareMap hardwareMap;
     private volatile Action ServoState = Init;
     private final Action InitState;
-    public ReentrantLock lock = new ReentrantLock();
+    private final boolean IsPatienceAvailable;
+    private long thisActionWaitingSec;
+    private final double ServoVel;
+    private final int DegRange;
+    private double ServoPosition;
+    private final ReentrantLock lock = new ReentrantLock();
     private boolean isSwitcherAssigned = false;
-    private CRServoFactory(@NonNull ServoBuilder Builder){
+
+    public void lock(){
+        lock.lock();
+    }
+    public void unlock(){
+        lock.unlock();
+    }
+    private CRServoEx(@NonNull ServoBuilder Builder){
         ServoNum=Builder.servoName.size();
         hardwareMap = Builder.hardwareMap;
         this.ServoAction = new HashMap<>(Builder.actionMap);
@@ -46,6 +58,9 @@ public class  CRServoFactory implements RunnableStructUnit {
         isSwitcherAssigned = Builder.isSwitcherSet;
         InitState = Builder.InitState;
         switcher = Builder.switcher;
+        ServoVel = Builder.ServoVel;
+        IsPatienceAvailable = Builder.isPatienceAvailable;
+        DegRange=Builder.DegRange;
     }
     /**
      * 初始化舵机位置操作
@@ -67,6 +82,7 @@ public class  CRServoFactory implements RunnableStructUnit {
             for (int i = 0; i < ServoNum; i++) {
                 ControlServo.get(i).setPower(TemporaryPosition);
             }
+            ServoPosition=TemporaryPosition;
             ServoState = InTemporary;
         }finally {
             lock.unlock();
@@ -87,10 +103,42 @@ public class  CRServoFactory implements RunnableStructUnit {
             for (int i = 0; i < ServoNum; i++) {
                 ControlServo.get(i).setPower(ServoAction.get(thisAction));
             }
+            thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction,this);
             ServoState = thisAction;
         }finally {
             lock.unlock();
         }
+    }
+    /**
+     * 自带线程阻塞的执行动作
+     * @param thisAction 当前目标动作
+     * @throws InterruptedException 阻塞可以被打断
+     */
+    public void PatientAct(Action thisAction) throws InterruptedException {
+        if(!IsPatienceAvailable){
+            throw new IllegalArgumentException("You can't use patient act because you haven't registered your servo's velocity");
+        }
+        if(!ServoAction.containsKey(thisAction)) {
+            throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
+        }
+        //给动作上锁，以免导致线程抢舵机
+        lock.lock();
+        try {
+            for (int i = 0; i < ServoNum; i++) {
+                ControlServo.get(i).setPower(ServoAction.get(thisAction));
+            }
+            thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction,this);
+            TimeUnit.MILLISECONDS.sleep(thisActionWaitingSec);
+            ServoState = thisAction;
+        }finally {
+            lock.unlock();
+        }
+    }
+    /**
+     * 获取当前动作需要等待的时间
+     */
+    public long WaitMillSec(){
+        return thisActionWaitingSec;
     }
     /**
      * Switch方法，可以让该舵机在规定的两个状态间切换，若都不在，！会执行到定义的Switch1的状态！
@@ -115,6 +163,32 @@ public class  CRServoFactory implements RunnableStructUnit {
         }else {
             throw new IllegalArgumentException("You haven't assigned a switcher for this servo.");
         }
+    }
+
+    /**
+     * 获取舵机角度范围
+     * @return 角度范围 Unit:Degree
+     */
+    public int getDegRange(){
+        return DegRange;
+    }
+    /**
+     * 获取舵机转速
+     * @return 舵机转速（Sec/60°）
+     */
+    public double getServoVel(){
+        return ServoVel;
+    }
+    /**
+     * 获取Action对应的位置
+     * @param target 需要获取的Action名称
+     * @return 舵机对应的位置
+     */
+    public Double getActionPosition(Action target){
+        if(target==InTemporary){
+            return ServoPosition;
+        }
+        return ServoAction.get(target);
     }
     /**
      * 获取当前舵机动作状态
@@ -162,6 +236,9 @@ public class  CRServoFactory implements RunnableStructUnit {
         private final Map<Action, Double> actionMap;
         private final HardwareMap hardwareMap;
         private SwitcherPair switcher;
+        private double ServoVel;
+        private int DegRange;
+        private boolean isPatienceAvailable;
         private final Action InitState;
         private boolean isSwitcherSet;
         public ServoBuilder(String ConfigName1,double InitPosition,boolean isReverse,HardwareMap hardwareMap) {
@@ -177,6 +254,18 @@ public class  CRServoFactory implements RunnableStructUnit {
             this.actionMap.put(InitAct, InitPosition);
             this.InitState = InitAct;
             this.hardwareMap = hardwareMap;
+        }
+        /**
+         * 设置该舵机转速以用于自动等待方法
+         * @param SecPer60Deg 每60度需要几秒
+         * @param DegRange 舵机角度
+         * @return 当前Builder实例，实现链式调用
+         */
+        public ServoBuilder SetServoVelAndRange(double SecPer60Deg, int DegRange){
+            this.ServoVel = SecPer60Deg;
+            this.DegRange = DegRange;
+            this.isPatienceAvailable=true;
+            return this;
         }
         /**
          *给这个封装添加一个新的同步舵机
@@ -223,11 +312,11 @@ public class  CRServoFactory implements RunnableStructUnit {
          * 构建并返回一个 ServoFactory 实例。
          * @return 构建好的 ServoFactory 对象
          */
-        public CRServoFactory build() {
+        public CRServoEx build() {
             if(!isSwitcherSet){
                 switcher = SwitcherPair.GetSwitcherPair(null,null);
             }
-            return new CRServoFactory(this);
+            return new CRServoEx(this);
         }
     }
 }

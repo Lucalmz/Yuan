@@ -1,4 +1,4 @@
-package com.bear27570.yuan.BotFactory;
+package com.bear27570.yuan.BotFactory.Model;
 
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 /**

@@ -1,14 +1,15 @@
-package com.bear27570.yuan.BotFactory;
+package com.bear27570.yuan.BotFactory.Model;
 
-import com.bear27570.yuan.BotFactory.Servo.CRServoFactory;
+import com.bear27570.yuan.BotFactory.Action;
+import com.bear27570.yuan.BotFactory.Servo.CRServoEx;
 
 /**
  * CR舵机和动作的共同封装类，用于safety check
  */
 public class CRServoActPair {
-    private final CRServoFactory servo;
+    private final CRServoEx servo;
     private final Action thisAct;
-    public CRServoActPair(CRServoFactory servo,Action thisAct){
+    public CRServoActPair(CRServoEx servo, Action thisAct){
         this.servo = servo;
         this.thisAct = thisAct;
     }
@@ -18,7 +19,7 @@ public class CRServoActPair {
     public Action getRelevantAction(){
         return thisAct;
     }
-    public CRServoFactory getServo(){
+    public CRServoEx getServo(){
         return servo;
     }
 }

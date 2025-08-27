@@ -10,18 +10,34 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 public class GamepadButton {
     private ElapsedTime ButtonTimer = new ElapsedTime();
     private boolean nowPressed,previousPressed;
-    public Thread thread;
+    //创建空线程，在客户端被覆盖
+    public Thread thread = new Thread(()->{});
+
+    /**
+     * 私有构造函数，从静态工厂创建实例
+     */
     private GamepadButton(){
         nowPressed = false;
         previousPressed = false;
         ButtonTimer.reset();
     }
+
+    /**
+     * 静态工厂方法创建实例
+     * @return 一个新的GamepadButton类型实例
+     */
     protected static GamepadButton initButton(){
         return new GamepadButton();
     }
-    public void update(boolean CurrentState){
+
+    /**
+     * 更新该按键
+     * @param CurrentState 当前Gamepad对应的状态
+     */
+    protected void update(boolean CurrentState){
         this.previousPressed = this.nowPressed;
         this.nowPressed = CurrentState;
+        thread.start();
     }
 
     /**

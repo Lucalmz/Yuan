@@ -1,6 +1,7 @@
 package com.bear27570.yuan.BotFactory.Services;
 
 import com.bear27570.yuan.BotFactory.Action;
+import com.bear27570.yuan.BotFactory.Servo.CRServoEx;
 import com.bear27570.yuan.BotFactory.Servo.ServoEx;
 
 /**
@@ -15,7 +16,11 @@ public class TimeServices {
      */
     public static long GetServoWaitMillSec(Action TargetState, ServoEx MoveServo){
         double MovePosition = MoveServo.getActionPosition(MoveServo.getState())-MoveServo.getActionPosition(TargetState);
-        return (long) (Math.abs(MovePosition)*MoveServo.getServoVel()*3*1000);
+        return (long) (Math.abs(MovePosition)*(MoveServo.getServoVel()/(MoveServo.getDegRange()/60.0))*1000);
+    }
+    public static long GetServoWaitMillSec(Action TargetState, CRServoEx MoveServo){
+        double MovePosition = MoveServo.getActionPosition(MoveServo.getState())-MoveServo.getActionPosition(TargetState);
+        return (long) (Math.abs(MovePosition)*(MoveServo.getServoVel()/(MoveServo.getDegRange()/60.0))*1000);
     }
     /**
      * 私有构造函数，防止实例化
