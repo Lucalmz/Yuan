@@ -1,8 +1,10 @@
 # Yuan-Developed-By-27570
 
-"Yuan"是针对于FTRST Tech Challenge的sdk进行开发的，首个结合JUC并发编程的一个具有线程控制的Java程序架构。使用了GPL-3.0License，你可以随意修改代码，但请注意基于此项目的代码必须开源！
+Stable version :1.0.2
 
-"Yuan" was developed for the FTRST Tech Challenge SDK. It's the first Java program framework with thread control, combined with JUC concurrent programming. It uses the GPL-3.0 license, so you can modify the code at will. However, please note that the code based on this project must be open source!
+"Yuan"是针对于FTRST Tech Challenge的sdk进行开发的，首个结合JUC并发编程的一个具有线程控制的Java程序架构。使用了GPL-3.0License，你可以随意修改代码，但请注意基于此项目的代码必须开源！如果你想要使用该框架，详情请见Tutorial.md
+
+"Yuan" was developed for the FTRST Tech Challenge SDK. It's the first Java program framework with thread control, combined with JUC concurrent programming. It uses the GPL-3.0 license, so you can modify the code at will. However, please note that the code based on this project must be open source!If you want to use this framework, please see the Tutorial.md for details.
 
 ---
 
@@ -23,7 +25,7 @@ dependencies {
     implementation 'org.firstinspires.ftc:Vision:10.3.0'
     以上是FTC的官方SDK
     **/
-    implementation 'io.github.bear27570:Yuan:1.0.1'
+    implementation 'io.github.bear27570:Yuan:1.0.2'
 }
 ```
 
@@ -76,16 +78,28 @@ This class is mainly for compatibility with the `CRServo` type. The logic is the
 
 `MotorEx` is an extension class of the `DcMotorEx` class for the upper structure. It implements `RunnableStructUnit`, supports native PIDF parameter settings, and also implements control atomicity through the AQS-based ReentrantLock in the JUC package. It supports synchronous motors required for rising slides, for example, and uses the same `Action` type as the `ServoEx` mentioned above to map data to enhance versatility. It is also very functional, supporting the power-limited `actWithPowerLimit` method and the `setTemporaryPosition` method that can set the position at any time, as well as other basic methods. For blocking actions, I used `CountDownLatch` to assist and created a new polling thread (with a slight delay to prevent idling) to activate the blocked main thread.
 
+#### StructureLink
+
+由上文三个实现了`RunnableStructUnit`的基础结构单元构成，通过共同的Action名称调用各自的位置，使用此方法便于集成控制，同时可以为动作添加SafetyCheck以保障动作群活动时的结构安全。该结构群线程安全，会给整个结构上锁同时给所有子系统上锁。
+
+Composed of the three basic structural units mentioned above that implement `RunnableStructUnit`, each location is called through a common Action name. This method facilitates integrated control and allows for adding SafetyChecks to actions to ensure structural safety during action group activity. This structural group is thread-safe and locks the entire structure and all subsystems.
+
+#### StructureGroup
+
+主要为上锁设计，例如一个动作需要原子性的完成一连串带有阻塞的动作，可以通过调用`lockAllSubsystems`实现将其下所有结构全部上锁以保障该结构动作原子性且不影响结构群外的其他结构。
+
+It is mainly designed for locking. For example, if an action needs to complete a series of blocking actions atomically, you can call `lockAllSubsystems` to lock all the structures under it to ensure the atomicity of the structure's actions without affecting other structures outside the structure group.
+
 ### Interface Part
 
 #### RunnableStructUnit
 
-对于基础结构单元定义接口，实现该接口可以使`Motor`和`Servo`方法统一，便于控制。同时降低对于结构群调用时的循环复杂度。
+对于基础结构单元定义接口，实现该接口可以使`Motor`和`Servo`以及`CRServo`方法统一，便于控制。同时降低对于结构群调用时的循环复杂度。
 
 An interface is defined for the basic structural unit. Implementing this interface can unify the methods of `Motor` and `Servo`, making it easier to control. At the same time, it reduces the cyclic complexity of the structure group calls.
 
+#### LockableGroup
 
+对于多个`RunnableStructUnit`形成的`StructLink`以及`StructureGroup`强制有`lockAllSubsystem`方法，以实现递归逐级上锁.
 
-
-
-
+For `StructLink` and `StructureGroup` formed by multiple `RunnableStructUnit`, a `lockAllSubsystem` method is mandatory to achieve recursive and step-by-step locking.
