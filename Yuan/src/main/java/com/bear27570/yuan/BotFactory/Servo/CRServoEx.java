@@ -118,18 +118,11 @@ public class CRServoEx implements RunnableStructUnit {
         if(!IsPatienceAvailable){
             throw new IllegalArgumentException("You can't use patient act because you haven't registered your servo's velocity");
         }
-        if(!ServoAction.containsKey(thisAction)) {
-            throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
-        }
         //给动作上锁，以免导致线程抢舵机
         lock.lock();
         try {
-            for (int i = 0; i < ServoNum; i++) {
-                ControlServo.get(i).setPower(ServoAction.get(thisAction));
-            }
-            thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction,this);
+            act(thisAction);
             TimeUnit.MILLISECONDS.sleep(thisActionWaitingSec);
-            ServoState = thisAction;
         }finally {
             lock.unlock();
         }

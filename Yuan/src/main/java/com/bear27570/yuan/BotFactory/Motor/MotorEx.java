@@ -6,6 +6,7 @@ import com.bear27570.yuan.BotFactory.Action;
 import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
+import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -25,6 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * @author LucaLi
  */
+@ThreadSafe
 public class MotorEx implements RunnableStructUnit {
     private final ArrayList<DcMotorEx> ControlMotor = new ArrayList<>();
     private final int MotorNum;

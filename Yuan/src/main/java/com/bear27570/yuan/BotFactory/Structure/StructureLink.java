@@ -3,12 +3,9 @@ package com.bear27570.yuan.BotFactory.Structure;
 import androidx.annotation.NonNull;
 
 import com.bear27570.yuan.BotFactory.Action;
-import com.bear27570.yuan.BotFactory.Model.CRServoActPair;
 import com.bear27570.yuan.BotFactory.Interface.LockableGroup;
-import com.bear27570.yuan.BotFactory.Model.MotorActPair;
 import com.bear27570.yuan.BotFactory.Model.RSUActPair;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
-import com.bear27570.yuan.BotFactory.Model.ServoActPair;
 import com.bear27570.yuan.BotFactory.Model.StructureActionPair;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
 
@@ -216,9 +213,6 @@ public class StructureLink implements LockableGroup {
     public static class StructureBuilder {
         private ArrayList<RunnableStructUnit>RSU;
         private ArrayList<Action> ActList;
-        private HashMap<Action, ServoActPair> SafetyCheckServo;
-        private HashMap<Action, MotorActPair> SafetyCheckMotor;
-        private HashMap<Action, CRServoActPair> SafetyCheckCRServo;
         private HashMap<Action, StructureActionPair> SafetyCheckStructure;
         private HashMap<Action, RSUActPair> SafetyCheckUnitList;
         private SwitcherPair Switcher;

@@ -16,7 +16,7 @@ public class TimeServices {
      */
     public static long GetServoWaitMillSec(Action TargetState, ServoEx MoveServo){
         double MovePosition = MoveServo.getActionPosition(MoveServo.getState())-MoveServo.getActionPosition(TargetState);
-        return (long) (Math.abs(MovePosition)*(MoveServo.getServoVel()/(MoveServo.getDegRange()/60.0))*1000);
+        return (long) (Math.abs(MovePosition)*(MoveServo.getServoMaxVel()/(MoveServo.getDegRange()/60.0))*1000);
     }
     public static long GetServoWaitMillSec(Action TargetState, CRServoEx MoveServo){
         double MovePosition = MoveServo.getActionPosition(MoveServo.getState())-MoveServo.getActionPosition(TargetState);

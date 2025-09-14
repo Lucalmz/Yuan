@@ -2,6 +2,9 @@ package com.bear27570.yuan.BotFactory.Gamepad;
 
 import androidx.annotation.NonNull;
 
+import com.bear27570.yuan.BotFactory.Model.RGB;
+import com.bear27570.yuan.BotFactory.RGBColor;
+import com.bear27570.yuan.BotFactory.Services.RGBColorTranslator;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.jetbrains.annotations.Contract;
@@ -83,6 +86,38 @@ public class GamepadEx{
         return new GamepadEx(gamepad);
     }
 
+    /**
+     * 调用Gamepad的runRumbleEffect方法
+     * @param effect 对应的RumbleEffect
+     */
+    public void RunRumbleEffect(Gamepad.RumbleEffect effect){
+        gamepad.runRumbleEffect(effect);
+    }
+
+    /**
+     * 调用Gamepad的rumble方法
+     * @param ms 对应的毫秒数
+     */
+    public void rumbleMs(int ms){
+        gamepad.rumble(ms);
+    }
+
+    /**
+     * 调用Gamepad的rumble方法
+     * @param leftRumbleIntensity 左摇杆强度
+     * @param rightRumbleIntensity 右摇杆强度
+     * @param durationMs 持续时间
+     */
+    public void rumble(double leftRumbleIntensity, double rightRumbleIntensity, int durationMs){
+        gamepad.rumble(leftRumbleIntensity, rightRumbleIntensity,durationMs);
+    }
+    public void setLed(int red, int green, int blue,int durationMs){
+        gamepad.setLedColor(red, green, blue, durationMs);
+    }
+    public void setLed(RGBColor color,int durationMs){
+        RGB rgb = RGBColorTranslator.RGBColorToRGB(color);
+        gamepad.setLedColor(rgb.getRed(), rgb.getGreen(), rgb.getBlue(), durationMs);
+    }
     /**
      * 根据传入的Gamepad更新按键
      */

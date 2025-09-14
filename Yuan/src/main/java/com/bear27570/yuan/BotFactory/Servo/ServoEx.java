@@ -5,10 +5,12 @@ import androidx.annotation.NonNull;
 import com.bear27570.yuan.BotFactory.Action;
 import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
+import com.bear27570.yuan.BotFactory.Services.ServoVelCalculator;
 import com.bear27570.yuan.BotFactory.Services.TimeServices;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import static com.bear27570.yuan.BotFactory.Action.*;
 
@@ -25,6 +27,14 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ServoEx implements RunnableStructUnit {
     private final ArrayList<Servo> ControlServo= new ArrayList<>();
     private final int ServoNum;
+    private final ElapsedTime timer;
+    public volatile boolean isVelControlRunning = true;
+
+    private final int updateIntervalMillis = 5;
+    // --- 旋转公共API ---
+    private volatile double targetVelocityDegPerSec;
+    private volatile double targetPosition;
+    private volatile double currentPosition;
     private final ArrayList<ConfigDirectionPair> Config;
     private final HashMap<Action, Double> ServoAction;
     private final SwitcherPair switcher;
@@ -33,11 +43,12 @@ public class ServoEx implements RunnableStructUnit {
     private final Action InitState;
     private final Boolean IsPatienceAvailable;
     private long thisActionWaitingSec;
-    private final Double ServoVel;
+    private volatile Double ServoMaxVel;
     private final int DegRange;
     private double ServoPosition;
     private final ReentrantLock lock = new ReentrantLock();
     private boolean isSwitcherAssigned = false;
+    public Thread workerThread;
 
     /**
      * 提供公用上锁方法
@@ -73,10 +84,27 @@ public class ServoEx implements RunnableStructUnit {
         this.InitState = Builder.InitState;
         this.switcher = Builder.switcher;
         this.IsPatienceAvailable = Builder.isPatienceAvailable;
-        this.ServoVel = Builder.ServoVel;
+        this.ServoMaxVel = Builder.ServoVel;
         this.DegRange = Builder.DegRange;
+        this.timer = new ElapsedTime();
+    }
+    private double getCalculatedPosition(){
+        return targetPosition;
+    }
+    /**
+     * 设置舵机的目标转速。
+     * @param degreesPerSecond 目标速度 (度/秒)。正值一个方向，负值反方向。
+     */
+    public void setVelocity(double degreesPerSecond) {
+        this.targetVelocityDegPerSec = degreesPerSecond;
     }
 
+    /**
+     * 获取舵机的目标转速。
+     */
+    public double getVelocity(){
+        return this.targetVelocityDegPerSec;
+    }
     /**
      * 初始化舵机位置操作
      */
@@ -87,7 +115,6 @@ public class ServoEx implements RunnableStructUnit {
         }
         ServoState = InitState;
     }
-
     /**
      * 为视觉这类需要瞄准的提供的方法，能够让舵机在线程安全的情况下到达任意未指定的位置
      * @param TemporaryPosition 舵机需要执行的位置
@@ -104,7 +131,56 @@ public class ServoEx implements RunnableStructUnit {
             lock.unlock();
         }
     }
+    public void actWithVel(double DegPerSec){
+        try {
+            lock();
+            timer.reset();
+            setVelocity(DegPerSec);
+            isVelControlRunning=true;
+            workerThread = new Thread(()->{
+                while (isVelControlRunning) {
+                    targetPosition = ServoVelCalculator.getTargetPosition(timer,targetVelocityDegPerSec,currentPosition,DegRange);
+                    SetTemporaryPosition(targetPosition);
+                    currentPosition=targetPosition;
+                    try {
+                        Thread.sleep(updateIntervalMillis);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            });
+            workerThread.setPriority(Thread.MAX_PRIORITY);
+            workerThread.start();
+        }finally {
+            unlock();
+        }
+    }
 
+    public void BlockedActWithVel(double DegPerSec){
+        try {
+            lock();
+            setVelocity(DegPerSec);
+            targetPosition = ServoVelCalculator.getTargetPosition(timer,targetVelocityDegPerSec,currentPosition,DegRange);
+            while (isVelControlRunning) {
+                targetPosition = ServoVelCalculator.getTargetPosition(timer,targetVelocityDegPerSec,currentPosition,DegRange);
+                SetTemporaryPosition(targetPosition);
+                if(currentPosition==1||currentPosition==0&&currentPosition==targetPosition){
+                    isVelControlRunning=false;
+                }
+                currentPosition=targetPosition;
+                Thread.sleep(updateIntervalMillis);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            unlock();
+        }
+    }
+    public void StopVelTurning(){
+        isVelControlRunning=false;
+        workerThread.interrupt();
+        setVelocity(0);
+    }
     /**
      *支持线程安全的动作，使用了ReentrantLock，能够保证动作不被意外打断
      * 所有记录过的舵机动作的入口
@@ -127,7 +203,6 @@ public class ServoEx implements RunnableStructUnit {
             lock.unlock();
         }
     }
-
     /**
      * 自带线程阻塞的执行动作
      * @param thisAction 当前目标动作
@@ -137,18 +212,11 @@ public class ServoEx implements RunnableStructUnit {
         if(!IsPatienceAvailable){
             throw new IllegalArgumentException("You can't use patient act because you haven't registered your servo's velocity");
         }
-        if(!ServoAction.containsKey(thisAction)) {
-            throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
-        }
         //给动作上锁，以免导致线程抢舵机
         lock.lock();
         try {
-            for (int i = 0; i < ServoNum; i++) {
-                ControlServo.get(i).setPosition(ServoAction.get(thisAction));
-            }
-            thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction,this);
+            act(thisAction);
             TimeUnit.MILLISECONDS.sleep(thisActionWaitingSec);
-            ServoState = thisAction;
         }finally {
             lock.unlock();
         }
@@ -206,7 +274,7 @@ public class ServoEx implements RunnableStructUnit {
     }
 
     /**
-     * 获取名称和对应数的HashMap（自己去查啊！）
+     * 获取名称和对应数的HashMap
      * @return Hashmap<Action,Double>
      */
     public HashMap<Action,Double> getNameList(){
@@ -232,11 +300,11 @@ public class ServoEx implements RunnableStructUnit {
         return DegRange;
     }
     /**
-     * 获取舵机转速
+     * 获取舵机最大转速
      * @return 舵机转速（Sec/60°）
      */
-    public double getServoVel(){
-        return ServoVel;
+    public double getServoMaxVel(){
+        return ServoMaxVel;
     }
     /**
      * 获取第i颗舵机是否被设置反向（i<n）
@@ -264,12 +332,14 @@ public class ServoEx implements RunnableStructUnit {
         private int DegRange;
         private boolean isPatienceAvailable;
         private boolean isSwitcherSet;
+
         public ServoBuilder(String ConfigName1,double InitPosition,boolean isReverse,HardwareMap hardwareMap) {
             this.servoName.add(new ConfigDirectionPair(ConfigName1, isReverse));
             this.actionMap = new HashMap<>();
             this.actionMap.put(Init, InitPosition);
             this.InitState = Init;
             this.hardwareMap = hardwareMap;
+
         }
         public ServoBuilder(String ConfigName1,Action InitAct,double InitPosition,boolean isReverse,HardwareMap hardwareMap) {
             this.servoName.add(new ConfigDirectionPair(ConfigName1, isReverse));
@@ -285,7 +355,7 @@ public class ServoEx implements RunnableStructUnit {
          * @param DegRange 舵机角度
          * @return 当前Builder实例，实现链式调用
          */
-        public ServoBuilder SetServoVelAndRange(double SecPer60Deg,int DegRange){
+        public ServoBuilder SetServoMaxVelAndRange(double SecPer60Deg,int DegRange){
             this.ServoVel = SecPer60Deg;
             this.DegRange = DegRange;
             this.isPatienceAvailable=true;
@@ -317,6 +387,7 @@ public class ServoEx implements RunnableStructUnit {
             actionMap.put(actionType, position);
             return this;
         }
+
 
         /**
          *设置便捷转换方式

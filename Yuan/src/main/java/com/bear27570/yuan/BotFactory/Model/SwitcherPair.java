@@ -3,7 +3,7 @@ package com.bear27570.yuan.BotFactory.Model;
 import com.bear27570.yuan.BotFactory.Action;
 
 /**
- * 两个动作的共同封装类，用于switch方法
+ * 两个动作的共同封装类，用于switch方法，该类只读
  */
 public class SwitcherPair {
     public Action getSwitch1() {
@@ -17,10 +17,18 @@ public class SwitcherPair {
     }
 
     private final Action switch2;
+    //私有构造函数，用静态工厂创建
     private SwitcherPair(Action s1,Action s2){
         switch1 = s1;
         switch2 = s2;
     }
+
+    /**
+     * 静态工厂方法，获取两个动作的封装
+     * @param s1 switcher1
+     * @param s2 switcher2
+     * @return
+     */
     public static SwitcherPair GetSwitcherPair(Action s1,Action s2){
         return new SwitcherPair(s1,s2);
     }
