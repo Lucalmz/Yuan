@@ -10,7 +10,7 @@ public class ServoVelCalculator {
         double targetPosition;
 
         // 如果速度为0或时间间隔太长，则不进行更新
-        if (targetVelocity == 0 || elapsedSeconds > 0.2) {
+        if (targetVelocity == 0 || elapsedSeconds > 0.3) {
             return currentPosition;
         }
 
