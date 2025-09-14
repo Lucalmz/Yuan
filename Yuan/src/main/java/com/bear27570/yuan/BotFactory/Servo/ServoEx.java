@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -47,6 +48,7 @@ public class ServoEx implements RunnableStructUnit {
     private final int DegRange;
     private double ServoPosition;
     private final ReentrantLock lock = new ReentrantLock();
+    private final Condition movementFinished = lock.newCondition();
     private boolean isSwitcherAssigned = false;
     public Thread workerThread;
 
@@ -87,6 +89,9 @@ public class ServoEx implements RunnableStructUnit {
         this.ServoMaxVel = Builder.ServoVel;
         this.DegRange = Builder.DegRange;
         this.timer = new ElapsedTime();
+        this.workerThread = new Thread(this::velocityControlLoop);
+        this.workerThread.setPriority(Thread.MAX_PRIORITY);
+        this.workerThread.start();
     }
     private double getCalculatedPosition(){
         return targetPosition;
@@ -131,44 +136,51 @@ public class ServoEx implements RunnableStructUnit {
             lock.unlock();
         }
     }
+    private void velocityControlLoop() {
+        while (!Thread.currentThread().isInterrupted()) {
+            if (isVelControlRunning && targetVelocityDegPerSec != 0) {
+                // 只有在速度控制模式且速度不为0时才计算
+                lock();
+                try {
+                    targetPosition = ServoVelCalculator.getTargetPosition(timer, targetVelocityDegPerSec, currentPosition, DegRange);
+                    SetTemporaryPosition(targetPosition);
+                    final double EPSILON = 0.0001;
+                    if (Math.abs(currentPosition - targetPosition) < EPSILON && (Math.abs(targetPosition-1)<EPSILON/10)||(Math.abs(targetPosition-0)<EPSILON/10)) {
+                        isVelControlRunning = false;
+                        movementFinished.signalAll();// 退出循环
+                    }
+                    currentPosition = targetPosition;
+                } finally {
+                    unlock();
+                }
+            }
+            try {
+                Thread.sleep(updateIntervalMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+    }
     public void actWithVel(double DegPerSec){
+        lock();
         try {
-            lock();
             timer.reset();
             setVelocity(DegPerSec);
             isVelControlRunning=true;
-            workerThread = new Thread(()->{
-                while (isVelControlRunning) {
-                    targetPosition = ServoVelCalculator.getTargetPosition(timer,targetVelocityDegPerSec,currentPosition,DegRange);
-                    SetTemporaryPosition(targetPosition);
-                    currentPosition=targetPosition;
-                    try {
-                        Thread.sleep(updateIntervalMillis);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                }
-            });
-            workerThread.setPriority(Thread.MAX_PRIORITY);
-            workerThread.start();
         }finally {
             unlock();
         }
     }
 
     public void BlockedActWithVel(double DegPerSec){
+        lock();
         try {
-            lock();
+            timer.reset();
             setVelocity(DegPerSec);
-            targetPosition = ServoVelCalculator.getTargetPosition(timer,targetVelocityDegPerSec,currentPosition,DegRange);
-            while (isVelControlRunning) {
-                targetPosition = ServoVelCalculator.getTargetPosition(timer,targetVelocityDegPerSec,currentPosition,DegRange);
-                SetTemporaryPosition(targetPosition);
-                if(currentPosition==1||currentPosition==0&&currentPosition==targetPosition){
-                    isVelControlRunning=false;
-                }
-                currentPosition=targetPosition;
-                Thread.sleep(updateIntervalMillis);
+            isVelControlRunning=true;
+            while(isVelControlRunning){
+                movementFinished.await();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -177,8 +189,7 @@ public class ServoEx implements RunnableStructUnit {
         }
     }
     public void StopVelTurning(){
-        isVelControlRunning=false;
-        workerThread.interrupt();
+        this.isVelControlRunning = false;
         setVelocity(0);
     }
     /**
