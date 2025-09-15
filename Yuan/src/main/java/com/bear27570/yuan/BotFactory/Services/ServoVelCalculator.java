@@ -1,6 +1,5 @@
 package com.bear27570.yuan.BotFactory.Services;
 
-import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 //针对舵机速度的计算位置功能
 public class ServoVelCalculator {

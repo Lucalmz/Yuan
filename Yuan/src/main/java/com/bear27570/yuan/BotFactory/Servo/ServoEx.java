@@ -8,6 +8,7 @@ import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.Services.ServoVelCalculator;
 import com.bear27570.yuan.BotFactory.Services.TimeServices;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
+import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -25,6 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * 线程安全的舵机封装类，使用了ReentrantLock
  * @author LucaLi
  */
+@ThreadSafe
 public class ServoEx implements RunnableStructUnit {
     private final ArrayList<Servo> ControlServo= new ArrayList<>();
     private final int ServoNum;
@@ -132,6 +134,7 @@ public class ServoEx implements RunnableStructUnit {
             }
             ServoPosition=TemporaryPosition;
             ServoState = InTemporary;
+            currentPosition = TemporaryPosition;
         }finally {
             lock.unlock();
         }
@@ -210,6 +213,7 @@ public class ServoEx implements RunnableStructUnit {
             }
             thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction,this);
             ServoState = thisAction;
+            currentPosition=ServoAction.get(thisAction);
         }finally {
             lock.unlock();
         }
