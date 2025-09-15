@@ -147,8 +147,7 @@ public class ServoEx implements RunnableStructUnit {
                 try {
                     targetPosition = ServoVelCalculator.getTargetPosition(timer, targetVelocityDegPerSec, currentPosition, DegRange);
                     SetTemporaryPosition(targetPosition);
-                    final double EPSILON = 0.0001;
-                    if (Math.abs(currentPosition - targetPosition) < EPSILON && (Math.abs(targetPosition-1)<EPSILON/10)||(Math.abs(targetPosition-0)<EPSILON/10)) {
+                    if (targetPosition>1||targetPosition<0) {
                         isVelControlRunning = false;
                         movementFinished.signalAll();// 退出循环
                     }
