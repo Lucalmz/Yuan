@@ -2,10 +2,12 @@ package com.bear27570.yuan.BotFactory.Motor;
 
 import androidx.annotation.NonNull;
 
-import com.bear27570.yuan.BotFactory.Action;
+import com.bear27570.yuan.BotFactory.Interface.Lockable;
+import com.bear27570.yuan.BotFactory.Model.Action;
 import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
+import com.bear27570.yuan.BotFactory.ThreadManagement.Task;
 import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -13,12 +15,13 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
-import static com.bear27570.yuan.BotFactory.Action.*;
+import static com.bear27570.yuan.BotFactory.Model.Action.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -27,7 +30,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author LucaLi
  */
 @ThreadSafe
-public class MotorEx implements RunnableStructUnit {
+public class MotorEx implements RunnableStructUnit , Lockable {
     private final ArrayList<DcMotorEx> ControlMotor = new ArrayList<>();
     private final int MotorNum;
     private final ArrayList<ConfigDirectionPair> Config;
@@ -37,11 +40,19 @@ public class MotorEx implements RunnableStructUnit {
     private final Action InitState;
     private final SwitcherPair switcher;
     private final ReentrantLock lock = new ReentrantLock();
+    private final PriorityBlockingQueue<Task> taskQueue = new PriorityBlockingQueue<>();
     private CountDownLatch latch = new CountDownLatch(1);
     private final boolean isSwitcherAssigned;
 
-    public void lock() {
+    public boolean tryLock() {
+        return lock.tryLock();
+    }
+    public void lock(){
         lock.lock();
+    }
+
+    public PriorityBlockingQueue<Task> getWaitingQueue(){
+        return taskQueue;
     }
 
     public void unlock() {

@@ -1,9 +1,9 @@
 package com.bear27570.yuan.BotFactory.Services;
 
 import com.bear27570.yuan.BotFactory.Model.RGB;
-import com.bear27570.yuan.BotFactory.RGBColor;
+import com.bear27570.yuan.BotFactory.Model.RGBColor;
 
-import static com.bear27570.yuan.BotFactory.RGBColor.*;
+import static com.bear27570.yuan.BotFactory.Model.RGBColor.*;
 
 import java.util.Map;
 

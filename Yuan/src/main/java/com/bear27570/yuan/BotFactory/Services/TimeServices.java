@@ -1,6 +1,6 @@
 package com.bear27570.yuan.BotFactory.Services;
 
-import com.bear27570.yuan.BotFactory.Action;
+import com.bear27570.yuan.BotFactory.Model.Action;
 import com.bear27570.yuan.BotFactory.Servo.ServoEx;
 
 /**

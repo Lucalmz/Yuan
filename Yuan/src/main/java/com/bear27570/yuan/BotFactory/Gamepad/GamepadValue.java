@@ -8,8 +8,6 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  */
 public class GamepadValue {
     private double nowPosition,lastPosition;
-    //初始化空线程，客户端对于需要的线程进行修改
-    public Thread thread = new Thread(()->{});
     private ElapsedTime PressTimer = new ElapsedTime();
 
     /**
@@ -37,7 +35,6 @@ public class GamepadValue {
         this.lastPosition = this.nowPosition;
         this.nowPosition = currentValue;
         PressTimer.reset();
-        thread.start();
     }
 
     /**

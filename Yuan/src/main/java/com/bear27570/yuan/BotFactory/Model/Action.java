@@ -1,4 +1,4 @@
-package com.bear27570.yuan.BotFactory;
+package com.bear27570.yuan.BotFactory.Model;
 /**
  * Action类型，用于存储所有可能的动作名称，每赛季更新
  */

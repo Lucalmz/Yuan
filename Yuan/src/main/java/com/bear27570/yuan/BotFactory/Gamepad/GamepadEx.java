@@ -3,7 +3,7 @@ package com.bear27570.yuan.BotFactory.Gamepad;
 import androidx.annotation.NonNull;
 
 import com.bear27570.yuan.BotFactory.Model.RGB;
-import com.bear27570.yuan.BotFactory.RGBColor;
+import com.bear27570.yuan.BotFactory.Model.RGBColor;
 import com.bear27570.yuan.BotFactory.Services.RGBColorTranslator;
 import com.qualcomm.robotcore.hardware.Gamepad;
 

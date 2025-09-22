@@ -1,7 +1,5 @@
 package com.bear27570.yuan.BotFactory.Model;
 
-import com.bear27570.yuan.BotFactory.Action;
-
 /**
  * 两个动作的共同封装类，用于switch方法，该类只读
  */

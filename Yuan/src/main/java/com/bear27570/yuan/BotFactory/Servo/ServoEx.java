@@ -2,22 +2,25 @@ package com.bear27570.yuan.BotFactory.Servo;
 
 import androidx.annotation.NonNull;
 
-import com.bear27570.yuan.BotFactory.Action;
+import com.bear27570.yuan.BotFactory.Interface.Lockable;
+import com.bear27570.yuan.BotFactory.Model.Action;
 import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.Services.ServoVelCalculator;
 import com.bear27570.yuan.BotFactory.Services.TimeServices;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
+import com.bear27570.yuan.BotFactory.ThreadManagement.Task;
 import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-import static com.bear27570.yuan.BotFactory.Action.*;
+import static com.bear27570.yuan.BotFactory.Model.Action.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -27,7 +30,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author LucaLi
  */
 @ThreadSafe
-public class ServoEx implements RunnableStructUnit {
+public class ServoEx implements RunnableStructUnit, Lockable {
     private final ArrayList<Servo> ControlServo= new ArrayList<>();
     private final int ServoNum;
     private final ElapsedTime timer;
@@ -49,15 +52,24 @@ public class ServoEx implements RunnableStructUnit {
     private volatile Double ServoMaxVel;
     private final int DegRange;
     private double ServoPosition;
+    //并发用
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition movementFinished = lock.newCondition();
+    private final PriorityBlockingQueue<Task> taskQueue = new PriorityBlockingQueue<>();
     private boolean isSwitcherAssigned = false;
     public Thread workerThread;
-
+    /**
+     * 获取等待队列
+     */
+    public PriorityBlockingQueue<Task> getWaitingQueue(){
+        return taskQueue;
+    }
     /**
      * 提供公用上锁方法
      */
-    @Override
+    public boolean tryLock(){
+        return lock.tryLock();
+    }
     public void lock(){
         lock.lock();
     }
@@ -65,7 +77,6 @@ public class ServoEx implements RunnableStructUnit {
     /**
      * 提供公用解锁方法
      */
-    @Override
     public void unlock(){
         lock.unlock();
     }

@@ -2,17 +2,21 @@ package com.bear27570.yuan.BotFactory.Structure;
 
 import androidx.annotation.NonNull;
 
-import com.bear27570.yuan.BotFactory.Action;
-import com.bear27570.yuan.BotFactory.Interface.LockableGroup;
-import com.bear27570.yuan.BotFactory.Model.RSUActPair;
+import com.bear27570.yuan.BotFactory.Interface.Lockable;
+import com.bear27570.yuan.BotFactory.Model.Action;
+import com.bear27570.yuan.BotFactory.Model.LockableActPair;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
-import com.bear27570.yuan.BotFactory.Model.StructureActionPair;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
+import com.bear27570.yuan.BotFactory.Motor.MotorEx;
+import com.bear27570.yuan.BotFactory.Servo.ServoEx;
+import com.bear27570.yuan.BotFactory.ThreadManagement.Task;
+import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Objects;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 /*
  *                        _oo0oo_
@@ -39,16 +43,17 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  *            佛祖保佑       永不宕机     永无BUG
  */
-public class StructureLink implements LockableGroup {
+@ThreadSafe
+public class StructureLink implements Lockable {
     private final ArrayList<RunnableStructUnit> StructureRSU;
+    private final ArrayList<Lockable> LockList;
     private final ArrayList<Action> ActionList;
-    private final HashMap<Action, StructureActionPair> SafetyCheckStructureList;
-    private final HashMap<Action, RSUActPair> SafetyCheckUnitList;
-    private final int SafetyCheckUnitNum;
+    private final HashMap<Action, LockableActPair> SafetyCheckList;
+    private final int SafetyCheckNum;
     private final int StructureRSUNum;
-    private final int SafetyCheckStructureNum;
     private final SwitcherPair Switcher;
     public ReentrantLock lock = new ReentrantLock();
+    private PriorityBlockingQueue<Task> taskQueue = new PriorityBlockingQueue<>();
     private volatile Action State;
 
     /**
@@ -58,84 +63,88 @@ public class StructureLink implements LockableGroup {
     private StructureLink(@NonNull StructureBuilder Builder) {
         this.StructureRSU=Builder.RSU;
         this.ActionList = Builder.ActList;
-        this.SafetyCheckStructureList = Builder.SafetyCheckStructure;
-        this.SafetyCheckStructureNum = SafetyCheckStructureList.size();
-        this.SafetyCheckUnitList = Builder.SafetyCheckUnitList;
-        this.SafetyCheckUnitNum = SafetyCheckUnitList.size();
+        this.SafetyCheckNum = Builder.SafetyCheckList.size();
+        this.SafetyCheckList = Builder.SafetyCheckList;
         this.StructureRSUNum=StructureRSU.size();
         this.Switcher = Builder.Switcher;
         this.State = Builder.InitState;
+        this.LockList = Builder.LockList;
     }
-
-    /**
-     * 将直系子系统全部上锁
-     */
-    @Override
-    public void lockAllSubsystems(){
+    public PriorityBlockingQueue<Task> getWaitingQueue(){
+        return taskQueue;
+    }
+    public boolean tryLock(){
+        ArrayList<Lockable> successfulList = new ArrayList<>();
+        for (int i = 0; i < StructureRSUNum; i++) {
+            if(!LockList.get(i).tryLock()) {
+                for (int m = 0; m < successfulList.size(); m++) {
+                    successfulList.get(m).unlock();
+                }
+                return false;
+            }
+            successfulList.add(LockList.get(i));
+        }
+        return lock.tryLock();
+    }
+    public void lock(){
+        lock.lock();
         for(int i = 0; i < StructureRSUNum;i++){
-            Objects.requireNonNull(StructureRSU.get(i)).lock();
+            Objects.requireNonNull(LockList.get(i)).lock();
         }
     }
-
     /**
      * 解锁全部直系子系统
      */
-    @Override
-    public void unLockAllSubsystems(){
+    public void unlock(){
         for(int i = 0; i < StructureRSUNum;i++){
-            Objects.requireNonNull(StructureRSU.get(i)).unlock();
+            Objects.requireNonNull(LockList.get(i)).unlock();
         }
     }
     /**
-     * 将全部子系统全部上锁
+     * 将全部安全检查的子系统全部上锁
      * @param currentAct 当前的执行动作，用于确认SafetyCheck所需的结构，避免等待不需要的结构
      */
-    public void lockAllWithSafetyCheckSubsystems(Action currentAct){
-        for (int i = 0; i < SafetyCheckStructureNum; i++) {
-            Objects.requireNonNull(SafetyCheckStructureList.get(currentAct)).getStructure().lock.lock();
-            Objects.requireNonNull(SafetyCheckStructureList.get(currentAct)).getStructure().lockAllWithSafetyCheckSubsystems(currentAct);
-        }
-        for (int i = 0; i < SafetyCheckUnitNum;i++){
-            Objects.requireNonNull(SafetyCheckUnitList.get(currentAct)).getUnit().lock();
-        }
-        lockAllSubsystems();
+    public boolean lockAllSafetyCheckSubsystems(Action currentAct){
+        ArrayList<Lockable> successfulList = new ArrayList<>();
+        AtomicBoolean isSuccessful = new AtomicBoolean(true);
+        Objects.requireNonNull(SafetyCheckList.get(currentAct)).getUnitList().forEach(unit -> {
+            if (!unit.tryLock()) {
+                for (int m = 0; m < successfulList.size(); m++) {
+                    successfulList.get(m).unlock();
+                }
+                isSuccessful.set(false);
+                return;
+            }
+            successfulList.add(unit);
+        });
+        return isSuccessful.get();
     }
     /**
-     * 释放所有子系统的锁
+     * 释放所有安全检查子系统的锁
      * @param currentAct 当前的执行动作，用于确认SafetyCheck所需的结构，避免等待不需要的结构
      */
-    public void unLockAllWithSafetyCheckSubsystems(Action currentAct){
-        for (int i = 0; i < SafetyCheckStructureNum; i++) {
-            Objects.requireNonNull(SafetyCheckStructureList.get(currentAct)).getStructure().lock.unlock();
-            Objects.requireNonNull(SafetyCheckStructureList.get(currentAct)).getStructure().unLockAllWithSafetyCheckSubsystems(currentAct);
-        }
-        for (int i = 0; i < SafetyCheckUnitNum;i++){
-            Objects.requireNonNull(SafetyCheckUnitList.get(currentAct)).getUnit().unlock();
-        }
-        unLockAllSubsystems();
+    public void unLockAllSafetyCheckSubsystems(Action currentAct){
+        Objects.requireNonNull(SafetyCheckList.get(currentAct)).getUnitList().forEach(Lockable::unlock);
     }
+
     /**
      * 主动作函数，使整个结构所有部件都到达对应的动作映射
+     *
      * @param currentAct 需要执行的动作名称
      */
     public void act(Action currentAct) {
-        lock.lock();
-        lockAllWithSafetyCheckSubsystems(currentAct);
+        lock();
         try {
-            for (int i = 0; i < SafetyCheckStructureNum; i++) {
-                SafetyCheckStructureList.get(currentAct).run();
+            for (int i = 0; i < SafetyCheckNum; i++) {
+                SafetyCheckList.get(currentAct).run();
             }
-            for (int i = 0; i < SafetyCheckUnitNum; i++){
-                SafetyCheckUnitList.get(currentAct).run();
-            }
-            for (int i = 0; i < StructureRSUNum; i++){
+            for (int i = 0; i < StructureRSUNum; i++) {
                 StructureRSU.get(i).act(currentAct);
             }
-            State = currentAct;
         }finally {
-            lock.unlock();
-            unLockAllWithSafetyCheckSubsystems(currentAct);
+            unlock();
         }
+        State = currentAct;
     }
 
     /**
@@ -143,7 +152,9 @@ public class StructureLink implements LockableGroup {
      */
     public void Init(){
         Check();
-        act(State);
+        for (int i = 0; i < StructureRSUNum; i++) {
+            StructureRSU.get(i).Init();
+        }
     }
 
     /**
@@ -169,17 +180,12 @@ public class StructureLink implements LockableGroup {
             Aim = Switcher.getSwitch2();
         }
         //双重锁，保证子结构绝对受控
-        lock.lock();
-        lockAllWithSafetyCheckSubsystems(Aim);
-        try {
-            if (requestState != State) {
-                return;
-            }
-            act(Aim);
-        }finally {
-            lock.unlock();
-            unLockAllWithSafetyCheckSubsystems(Aim);
+        if(!tryLock()&&!lockAllSafetyCheckSubsystems(Aim)){
+            throw new RuntimeException("Lock structure failed!");
         }
+        act(Aim);
+        unlock();
+        unLockAllSafetyCheckSubsystems(Aim);
     }
 
     /**
@@ -197,24 +203,20 @@ public class StructureLink implements LockableGroup {
         if(Aim == null){
             throw new IllegalStateException("This Structure isn't in any state of those two registered state!");
         }
-        lock.lock();
-        lockAllWithSafetyCheckSubsystems(Aim);
-        try {
-            if (requestState != State) {
-                return;
-            }
-            act(Aim);
-        }finally {
-            lock.unlock();
-            unLockAllWithSafetyCheckSubsystems(Aim);
+        //双重锁，保证子结构绝对受控
+        if(!tryLock()&&!lockAllSafetyCheckSubsystems(Aim)) {
+            throw new RuntimeException("Lock structure failed! Please check task manager");
         }
+        act(Aim);
+        unlock();
+        unLockAllSafetyCheckSubsystems(Aim);
     }
 
     public static class StructureBuilder {
         private ArrayList<RunnableStructUnit>RSU;
         private ArrayList<Action> ActList;
-        private HashMap<Action, StructureActionPair> SafetyCheckStructure;
-        private HashMap<Action, RSUActPair> SafetyCheckUnitList;
+        private HashMap<Action, LockableActPair> SafetyCheckList;
+        private ArrayList<Lockable> LockList;
         private SwitcherPair Switcher;
         private Action InitState = Action.Init;
         private boolean switcherIsSet;
@@ -238,11 +240,24 @@ public class StructureLink implements LockableGroup {
         /**
          * 添加一个结构单元
          *
-         * @param newRSU 这个结构中的一个结构单元
+         * @param motor 这个结构中的一个电机
          * @return 当前Builder实例，实现链式调用
          */
-        public StructureBuilder add(RunnableStructUnit newRSU) {
-            this.RSU.add(newRSU);
+        public StructureBuilder add(MotorEx motor) {
+            this.RSU.add(motor);
+            this.LockList.add(motor);
+            return this;
+        }
+
+        /**
+         * 添加一个结构单元
+         *
+         * @param servo 这个结构中的一个电机
+         * @return 当前Builder实例，实现链式调用
+         */
+        public StructureBuilder add(ServoEx servo) {
+            this.RSU.add(servo);
+            this.LockList.add(servo);
             return this;
         }
 
@@ -281,21 +296,14 @@ public class StructureLink implements LockableGroup {
          * @param SafeAct     该舵机需要的状态
          * @return 当前Builder实例，实现链式调用
          */
-        public StructureBuilder addStructActSafetyCheck(Action StructAct, RunnableStructUnit AttachUnit, Action SafeAct) {
-            SafetyCheckUnitList.put(StructAct, new RSUActPair(AttachUnit, SafeAct));
-            return this;
-        }
-
-        /**
-         * 为当前结构添加安全性检查，添加执行动作时结构外的可能对该结构动作产生影响的结构所应处于的位置
-         *
-         * @param StructAct    当执行该动作时需要安全检查
-         * @param AttachStruct 需要被安全检查的结构组
-         * @param SafeAct      该结构组需要的状态
-         * @return 当前Builder实例，实现链式调用
-         */
-        public StructureBuilder addStructActSafetyCheck(Action StructAct, StructureLink AttachStruct, Action SafeAct) {
-            SafetyCheckStructure.put(StructAct, new StructureActionPair(AttachStruct, SafeAct));
+        public StructureBuilder addStructActSafetyCheck(Action StructAct, Lockable AttachUnit, Action SafeAct) {
+            if(!SafetyCheckList.containsKey(StructAct)){
+                SafetyCheckList.put(StructAct,new LockableActPair(StructAct));
+                SafetyCheckList.get(StructAct).addUnit(AttachUnit);
+            }
+            else{
+                SafetyCheckList.get(StructAct).addUnit(AttachUnit);
+            }
             return this;
         }
 

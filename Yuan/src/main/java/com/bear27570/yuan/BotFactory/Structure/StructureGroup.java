@@ -2,8 +2,9 @@ package com.bear27570.yuan.BotFactory.Structure;
 
 import androidx.annotation.NonNull;
 
-import com.bear27570.yuan.BotFactory.Interface.LockableGroup;
+import com.bear27570.yuan.BotFactory.Interface.Lockable;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
+import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 
 import java.util.ArrayList;
 import java.util.concurrent.locks.ReentrantLock;
@@ -32,46 +33,44 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  *            佛祖保佑       永不宕机     永无BUG
  */
-public class StructureGroup implements LockableGroup {
-    private final ArrayList<RunnableStructUnit> RSU;
-    private final ArrayList<StructureLink> Structures;
-    private final int StructureNum;
-    private final int RSUNum;
+@ThreadSafe
+public class StructureGroup{
+    private final ArrayList<Lockable> Unit;
+    private final int UnitNum;
     public ReentrantLock lock = new ReentrantLock();
     private StructureGroup(@NonNull StructureBuilder Builder){
-        this.Structures=Builder.Structures;
-        this.RSU=Builder.RSU;
-        StructureNum=Structures.size();
-        RSUNum = RSU.size();
+        this.Unit = Builder.Unit;
+        this.UnitNum = Builder.Unit.size();
     }
     /**
      * 将子系统全部上锁
      */
-    @Override
-    public void lockAllSubsystems(){
-        for (int i = 0; i < RSUNum; i++) {
-            RSU.get(i).lock();
+    public boolean tryLock(){
+        ArrayList<Lockable> successfulList = new ArrayList<>();
+        for (int i = 0; i < UnitNum; i++) {
+            if(!Unit.get(i).tryLock()) {
+                for (int m = 0; m < successfulList.size(); m++) {
+                    successfulList.get(m).unlock();
+                }
+                return false;
+            }
+            successfulList.add(Unit.get(i));
         }
-        for(int i = 0; i < StructureNum; i++){
-            Structures.get(i).lock.lock();
-            Structures.get(i).lockAllSubsystems();
+        if(!lock.tryLock()){
+            return false;
         }
+        return true;
     }
     /**
      * 释放所有子系统的锁
      */
-    public void unLockAllSubsystems(){
-        for (int i = 0; i < RSUNum; i++) {
-            RSU.get(i).lock();
-        }
-        for(int i = 0; i < StructureNum; i++){
-            Structures.get(i).lock.unlock();
-            Structures.get(i).unLockAllSubsystems();
+    public void unlock(){
+        for (int i = 0; i < UnitNum; i++) {
+            Unit.get(i).unlock();
         }
     }
     public static class StructureBuilder {
-        private ArrayList<RunnableStructUnit> RSU;
-        private ArrayList<StructureLink> Structures;
+        private ArrayList<Lockable> Unit;
 
         /**
          * 空参构造，无特殊必须的参数
@@ -82,22 +81,11 @@ public class StructureGroup implements LockableGroup {
         /**
          * 添加一个活动单元
          *
-         * @param newRSU 这个结构中的一个活动单元
+         * @param newUnit 这个结构中的一个活动单元
          * @return 当前Builder实例，实现链式调用
          */
-        public StructureBuilder add(RunnableStructUnit newRSU) {
-            this.RSU.add(newRSU);
-            return this;
-        }
-
-        /**
-         * 添加一个结构链
-         *
-         * @param newStructure 这个结构中的一个结构链
-         * @return 当前Builder实例，实现链式调用
-         */
-        public StructureBuilder add(StructureLink newStructure) {
-            this.Structures.add(newStructure);
+        public StructureBuilder add(Lockable newUnit) {
+            this.Unit.add(newUnit);
             return this;
         }
         /**
