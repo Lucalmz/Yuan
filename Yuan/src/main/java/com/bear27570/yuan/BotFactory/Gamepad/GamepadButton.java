@@ -1,9 +1,6 @@
 package com.bear27570.yuan.BotFactory.Gamepad;
 
-import com.bear27570.yuan.BotFactory.Model.ButtonMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
-
-import static com.bear27570.yuan.BotFactory.Model.ButtonMode.*;
 
 
 /**

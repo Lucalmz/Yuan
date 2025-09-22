@@ -10,7 +10,7 @@ import java.util.Set;
 public class Task implements Comparable<Task>{
     private Runnable mainTask;
     private Runnable inInterruptCleanUp;
-    Set<Lockable> requirements = new HashSet<>();
+    private Set<Lockable> requirements = new HashSet<>();
     private final Priority priority;
     private final ConflictPolicy policy;
 
