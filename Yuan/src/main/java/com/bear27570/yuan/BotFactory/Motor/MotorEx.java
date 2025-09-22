@@ -41,7 +41,6 @@ public class MotorEx implements RunnableStructUnit , Lockable {
     private final SwitcherPair switcher;
     private final ReentrantLock lock = new ReentrantLock();
     private final PriorityBlockingQueue<Task> taskQueue = new PriorityBlockingQueue<>();
-    private CountDownLatch latch = new CountDownLatch(1);
     private final boolean isSwitcherAssigned;
 
     public boolean tryLock() {
@@ -112,24 +111,27 @@ public class MotorEx implements RunnableStructUnit , Lockable {
     }
 
     @Override
-    public void PatientAct(Action thisAction) throws InterruptedException {
+    public void PatientAct(Action thisAction) throws InterruptedException{
         lock.lock();
         act(thisAction);
-        latch = new CountDownLatch(1);
-        new Thread(() -> {
+        try {
             while (isBusy()) {
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().isInterrupted();
-                    latch.countDown();
-                    return;
-                }
+                Thread.sleep(5);
             }
-        }).start();
-        latch.await();
-        //执行解锁操作
-        lock.unlock();
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 设置电机停止行为
+     * @param ZeroPowerBehavior BREAK/FLOAT
+     */
+    public void SetZeroPowerBehavior(DcMotor.ZeroPowerBehavior ZeroPowerBehavior){
+        for (int i = 0; i < MotorNum; i++) {
+            ControlMotor.get(i).setZeroPowerBehavior(ZeroPowerBehavior);
+        }
     }
 
     /**
@@ -172,7 +174,6 @@ public class MotorEx implements RunnableStructUnit , Lockable {
                 return true;
             }
         }
-        latch.countDown();
         return false;
     }
 

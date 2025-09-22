@@ -1,6 +1,7 @@
 package com.bear27570.yuan.BotFactory.ThreadManagement;
 
 import com.bear27570.yuan.BotFactory.Interface.Lockable;
+import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,6 +18,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * 它能够处理任务间的资源冲突，并根据预设策略（忽略、排队、中断）来解决这些冲突，
  * 所有调度操作都通过全局锁来确保线程安全。
  */
+@ThreadSafe
 public class TaskManager {
     // 使用缓存线程池来执行任务，适合处理大量、短暂的突发性任务。
     private final ExecutorService executor = new ThreadPoolExecutor(
