@@ -34,6 +34,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *            佛祖保佑       永不宕机     永无BUG
  */
 @ThreadSafe
+@Deprecated
 public class StructureGroup{
     private final ArrayList<Lockable> Unit;
     private final int UnitNum;

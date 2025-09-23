@@ -20,18 +20,26 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 @ThreadSafe
 public class TaskManager {
+    private static final TaskManager INSTANCE = new TaskManager();
     // 使用缓存线程池来执行任务，适合处理大量、短暂的突发性任务。
-    private final ExecutorService executor = new ThreadPoolExecutor(
-            0,Integer.MAX_VALUE,
-            30L, TimeUnit.SECONDS,
-            new SynchronousQueue<>());
+    private final ExecutorService executor;
 
     // 存储当前正在运行的任务，Key为被占用的资源，Value为任务信息。
-    private final ConcurrentMap<Lockable, RunningTaskInfo> runningTasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Lockable, RunningTaskInfo> runningTasks;
 
     // 用于保护任务调度逻辑的全局锁。
-    private final ReentrantLock SchedulerLock = new ReentrantLock();
-
+    private final ReentrantLock SchedulerLock;
+    private TaskManager() {
+        this.executor = new ThreadPoolExecutor(
+                0, Integer.MAX_VALUE,
+                30L, TimeUnit.SECONDS,
+                new SynchronousQueue<>());
+        this.runningTasks = new ConcurrentHashMap<>();
+        this.SchedulerLock = new ReentrantLock();
+    }
+    public static TaskManager getInstance(){
+        return INSTANCE;
+    }
     /**
      * 提交一个新任务进行调度。
      * 此方法会检查任务的资源需求，如果存在冲突，则根据任务的冲突策略进行处理。

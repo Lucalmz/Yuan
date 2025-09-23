@@ -40,13 +40,13 @@ The `GamepadEx` class is a repackage of the native `Gamepad` class, extending it
 
 #### ServoEx
 
-`ServoEx`对应着原生的`Servo`类，实现了`RunnableStructUnit`接口，使用了JUC中基于AQS框架的ReentrantLock，通过对该控制机构上线程锁，防止一个连贯动作被修改（区别于打断，打断会释放锁并执行其他需要锁的逻辑）。其功能丰富，支持舵机同步，使用Builder Param实现链式调用以适应输入数据的不确定性。使用了`HashMap`将`Action`这一枚举类型的名称与对应的舵机位置进行映射，方便管理舵机数据，可以提升用户端程序的可读性，用户也可以通过读取有限状态机`ServoState`获取舵机当前的状态。同时对设置临时数据保持兼容性，以保证其可以用于视觉识别等场景。支持阻塞性动作，通过设置的舵机转速判断当前需要运行的角度对应需要阻塞的时间（线性的）。对于以DECODE赛季为例的可能需要队伍搭建云台控制发射机构的场景，我提供了`actWithVel(double DegPerSec)`方法和其阻塞方法，用一个200Hz的线程不断修正目标点实现PWM舵机的转速控制。
+`ServoEx`对应着原生的`Servo`类，实现了`RunnableStructUnit`接口和`Lockable`结构，使用了JUC中基于AQS框架的ReentrantLock，通过对该控制机构上线程锁，防止一个连贯动作被修改（区别于打断，打断会释放锁并执行其他需要锁的逻辑）。其功能丰富，支持舵机同步，使用Builder Param实现链式调用以适应输入数据的不确定性。使用了`HashMap`将`Action`这一枚举类型的名称与对应的舵机位置进行映射，方便管理舵机数据，可以提升用户端程序的可读性，用户也可以通过读取有限状态机`ServoState`获取舵机当前的状态。同时对设置临时数据保持兼容性，以保证其可以用于视觉识别等场景。支持阻塞性动作，通过设置的舵机转速判断当前需要运行的角度对应需要阻塞的时间（线性的）。对于以DECODE赛季为例的可能需要队伍搭建云台控制发射机构的场景，我提供了`actWithVel(double DegPerSec)`方法和其阻塞方法，用一个200Hz的线程不断修正目标点实现PWM舵机的转速控制。
 
-`ServoEx` corresponds to the native `Servo` class, implements the `RunnableStructUnit` interface, and uses the ReentrantLock based on the AQS framework in JUC. By setting a thread lock on the control mechanism, a coherent action is prevented from being modified (different from interruption, which releases the lock and executes other logic that requires the lock). It is rich in functions and uses Builder Param to implement chain calls to adapt to the uncertainty of input data. `HashMap` is used to map the name of the `Action` enumeration type to the corresponding servo position, which facilitates the management of servo data and improves the readability of the user-side program. Users can also obtain the current status of the servo by reading the finite state machine `ServoState`. At the same time, compatibility is maintained for setting temporary data to ensure that it can be used in scenarios such as visual recognition.Supports blocking action, and determines the current required running angle and the corresponding blocking time (linear) by setting the servo speed.For scenarios like the DECODE season, where teams might need to build a gimbal-controlled launch mechanism, I provided the `actWithVel(double DegPerSec)` method and its blocking method, using a 200Hz thread to continuously correct the target point to achieve PWM servo speed control.
+`ServoEx` corresponds to the native `Servo` class, implements the `RunnableStructUnit` interface and `Lockable` interface, and uses the ReentrantLock based on the AQS framework in JUC. By setting a thread lock on the control mechanism, a coherent action is prevented from being modified (different from interruption, which releases the lock and executes other logic that requires the lock). It is rich in functions and uses Builder Param to implement chain calls to adapt to the uncertainty of input data. `HashMap` is used to map the name of the `Action` enumeration type to the corresponding servo position, which facilitates the management of servo data and improves the readability of the user-side program. Users can also obtain the current status of the servo by reading the finite state machine `ServoState`. At the same time, compatibility is maintained for setting temporary data to ensure that it can be used in scenarios such as visual recognition.Supports blocking action, and determines the current required running angle and the corresponding blocking time (linear) by setting the servo speed.For scenarios like the DECODE season, where teams might need to build a gimbal-controlled launch mechanism, I provided the `actWithVel(double DegPerSec)` method and its blocking method, using a 200Hz thread to continuously correct the target point to achieve PWM servo speed control.
 
 #### MotorEx
 
-`MotorEx`是针对上层结构的`DcMotorEx`类的扩展类，实现了`RunnableStructUnit`，支持原生的PIDF参数设定，同时也通过JUC包中基于AQS的ReentrantLock实现控制的原子性。其支持例如上升滑轨所必须的同步电机，与上文的`ServoEx`通用一个`Action`类型进行对数据进行映射以增强通用性。其功能同样十分丰富，支持有功率限制的`actWithPowerLimit`方法以及可以随时设置位置的`setTemporaryPosition`方法还有其他基础方法。对于阻塞性动作，以200Hz轮询动作是否完成以保障CPU性能。
+`MotorEx`是针对上层结构的`DcMotorEx`类的扩展类，实现了`RunnableStructUnit`和，支持原生的PIDF参数设定，同时也通过JUC包中基于AQS的ReentrantLock实现控制的原子性。其支持例如上升滑轨所必须的同步电机，与上文的`ServoEx`通用一个`Action`类型进行对数据进行映射以增强通用性。其功能同样十分丰富，支持有功率限制的`actWithPowerLimit`方法以及可以随时设置位置的`setTemporaryPosition`方法还有其他基础方法。对于阻塞性动作，以200Hz轮询动作是否完成以保障CPU性能。
 
 `MotorEx` is an extension class of the `DcMotorEx` class for the upper structure. It implements `RunnableStructUnit`, supports native PIDF parameter settings, and also implements control atomicity through the AQS-based ReentrantLock in the JUC package. It supports synchronous motors required for rising slides, for example, and uses the same `Action` type as the `ServoEx` mentioned above to map data to enhance versatility. It is also very functional, supporting the power-limited `actWithPowerLimit` method and the `setTemporaryPosition` method that can set the position at any time, as well as other basic methods.
 
@@ -56,22 +56,14 @@ The `GamepadEx` class is a repackage of the native `Gamepad` class, extending it
 
 Composed of the three basic structural units mentioned above that implement `RunnableStructUnit`, each location is called through a common Action name. This method facilitates integrated control and allows for adding SafetyChecks to actions to ensure structural safety during action group activity. This structural group is thread-safe and locks the entire structure and all subsystems.
 
-#### StructureGroup
-
-主要为上锁设计，例如一个动作需要原子性的完成一连串带有阻塞的动作，可以通过调用`lockAllSubsystems`实现将其下所有结构全部上锁以保障该结构动作原子性且不影响结构群外的其他结构。
-
-It is mainly designed for locking. For example, if an action needs to complete a series of blocking actions atomically, you can call `lockAllSubsystems` to lock all the structures under it to ensure the atomicity of the structure's actions without affecting other structures outside the structure group.
-
 ### Interface Part
 
 #### RunnableStructUnit
 
-对于基础结构单元定义接口，实现该接口可以使`Motor`和`Servo`以及`CRServo`方法统一，便于控制。同时降低对于结构群调用时的循环复杂度。
+对于基础结构单元定义接口，实现该接口可以使`Motor`和`Servo``方法统一，便于控制。同时降低对于结构群调用时的循环复杂度。
 
 An interface is defined for the basic structural unit. Implementing this interface can unify the methods of `Motor` and `Servo`, making it easier to control. At the same time, it reduces the cyclic complexity of the structure group calls.
 
-#### LockableGroup
+#### Lockable
 
-对于多个`RunnableStructUnit`形成的`StructLink`以及`StructureGroup`强制有`lockAllSubsystem`方法，以实现递归逐级上锁.
-
-For `StructLink` and `StructureGroup` formed by multiple `RunnableStructUnit`, a `lockAllSubsystem` method is mandatory to achieve recursive and step-by-step locking.
+包括所有硬件(组)，辅助任务管理的冲突策略，降低管理复杂度。
