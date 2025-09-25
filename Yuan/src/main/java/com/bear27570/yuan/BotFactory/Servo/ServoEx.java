@@ -150,12 +150,20 @@ public class ServoEx implements RunnableStructUnit, Lockable {
      * @param TemporaryPosition 舵机需要执行的位置
      */
     public void SetTemporaryPosition(double TemporaryPosition) {
-        for (int i = 0; i < ServoNum; i++) {
-            ControlServo.get(i).setPosition(TemporaryPosition);
+        if (TemporaryPosition < 0 || TemporaryPosition > 1) {
+            throw new IllegalArgumentException("Servo position must be between 0.0 and 1.0");
         }
-        ServoPosition = TemporaryPosition;
-        ServoState = InTemporary;
-        currentPosition = TemporaryPosition;
+        lock.lock();
+        try {
+            for (int i = 0; i < ServoNum; i++) {
+                ControlServo.get(i).setPosition(TemporaryPosition);
+            }
+            ServoPosition = TemporaryPosition;
+            ServoState = InTemporary;
+            currentPosition = TemporaryPosition;
+        }finally {
+            lock.unlock();
+        }
     }
 
     private void velocityControlLoop() {
@@ -164,8 +172,14 @@ public class ServoEx implements RunnableStructUnit, Lockable {
                 targetPosition = ServoVelCalculator.getTargetPosition(timer, targetVelocityDegPerSec, currentPosition, DegRange);
                 SetTemporaryPosition(targetPosition);
                 if (targetPosition > 1 || targetPosition < 0) {
-                    isVelControlRunning = false;
-                    movementFinished.signalAll();// 退出循环
+                    lock.lock();
+                    try {
+                        isVelControlRunning = false;
+                        // signalAll 必须在 try 块中，且必须持有锁
+                        movementFinished.signalAll();
+                    } finally {
+                        lock.unlock();
+                    }
                 }
                 currentPosition = targetPosition;
             }
@@ -185,6 +199,7 @@ public class ServoEx implements RunnableStructUnit, Lockable {
     }
 
     public void BlockedActWithVel(double DegPerSec) {
+        lock.lock();
         try {
             timer.reset();
             setVelocity(DegPerSec);
@@ -194,6 +209,8 @@ public class ServoEx implements RunnableStructUnit, Lockable {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }finally {
+            lock.unlock();
         }
     }
 
@@ -213,13 +230,17 @@ public class ServoEx implements RunnableStructUnit, Lockable {
         if (!ServoAction.containsKey(thisAction)) {
             throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
         }
-        //给动作上锁，以免导致线程抢舵机
-        for (int i = 0; i < ServoNum; i++) {
-            ControlServo.get(i).setPosition(ServoAction.get(thisAction));
+        lock.lock();
+        try {
+            for (int i = 0; i < ServoNum; i++) {
+                ControlServo.get(i).setPosition(ServoAction.get(thisAction));
+            }
+            thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction, this);
+            ServoState = thisAction;
+            currentPosition = ServoAction.get(thisAction);
+        }finally {
+            lock.unlock();
         }
-        thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction, this);
-        ServoState = thisAction;
-        currentPosition = ServoAction.get(thisAction);
     }
 
     /**
@@ -232,7 +253,6 @@ public class ServoEx implements RunnableStructUnit, Lockable {
         if (!IsPatienceAvailable) {
             throw new IllegalArgumentException("You can't use patient act because you haven't registered your servo's velocity");
         }
-        //给动作上锁，以免导致线程抢舵机
         act(thisAction);
         TimeUnit.MILLISECONDS.sleep(thisActionWaitingSec);
     }
@@ -255,6 +275,7 @@ public class ServoEx implements RunnableStructUnit, Lockable {
             } else {
                 act(switcher.getSwitch1());
             }
+            return;
         }
         throw new IllegalArgumentException("You haven't assigned a switcher for this servo.");
     }
@@ -335,6 +356,20 @@ public class ServoEx implements RunnableStructUnit, Lockable {
             throw new ArrayIndexOutOfBoundsException("Are you fucking kidding me? I can't tell you a fucking servo whether it is reversed more than" + (ServoNum - 1) + ", but you asked me to tell you the " + i + "one!");
         }
         return Config.get(i).isReverse();
+    }
+
+    /**
+     * 关闭速度管理线程
+     */
+    public void shutdownVelThread() {
+        if (workerThread != null && workerThread.isAlive()) {
+            workerThread.interrupt(); // 中断线程
+            try {
+                workerThread.join(); // 等待线程执行完毕
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     /**
