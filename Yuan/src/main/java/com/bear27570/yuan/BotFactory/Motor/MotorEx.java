@@ -30,7 +30,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author LucaLi
  */
 @ThreadSafe
-public class MotorEx implements RunnableStructUnit , Lockable {
+public class MotorEx implements RunnableStructUnit, Lockable {
     private final ArrayList<DcMotorEx> ControlMotor = new ArrayList<>();
     private final int MotorNum;
     private final ArrayList<ConfigDirectionPair> Config;
@@ -46,11 +46,12 @@ public class MotorEx implements RunnableStructUnit , Lockable {
     public boolean tryLock() {
         return lock.tryLock();
     }
-    public void lock(){
+
+    public void lock() {
         lock.lock();
     }
 
-    public PriorityBlockingQueue<Task> getWaitingQueue(){
+    public PriorityBlockingQueue<Task> getWaitingQueue() {
         return taskQueue;
     }
 
@@ -111,24 +112,19 @@ public class MotorEx implements RunnableStructUnit , Lockable {
     }
 
     @Override
-    public void PatientAct(Action thisAction) throws InterruptedException{
-        lock.lock();
+    public void PatientAct(Action thisAction) throws InterruptedException {
         act(thisAction);
-        try {
-            while (isBusy()) {
-                Thread.sleep(5);
-            }
-        }
-        finally {
-            lock.unlock();
+        while (isBusy()) {
+            Thread.sleep(5);
         }
     }
 
     /**
      * 设置电机停止行为
+     *
      * @param ZeroPowerBehavior BREAK/FLOAT
      */
-    public void SetZeroPowerBehavior(DcMotor.ZeroPowerBehavior ZeroPowerBehavior){
+    public void SetZeroPowerBehavior(DcMotor.ZeroPowerBehavior ZeroPowerBehavior) {
         for (int i = 0; i < MotorNum; i++) {
             ControlMotor.get(i).setZeroPowerBehavior(ZeroPowerBehavior);
         }
@@ -144,23 +140,19 @@ public class MotorEx implements RunnableStructUnit , Lockable {
      */
     public void actWithPowerLimit(Action thisAction, double powerLimit) {
         Action requestState = MotorState;
-        lock.lock();
-        try {
-            if (requestState != MotorState) {
-                return;
-            }
-            if (!MotorAction.containsKey(thisAction)) {
-                throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
-            }
-            for (int i = 0; i < MotorNum; i++) {
-                ControlMotor.get(i).setTargetPosition(MotorAction.get(thisAction).intValue());
-                ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                ControlMotor.get(i).setPower(powerLimit);
-            }
-            MotorState = thisAction;
-        } finally {
-            lock.unlock();
+        if (requestState != MotorState) {
+            return;
         }
+        if (!MotorAction.containsKey(thisAction)) {
+            throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
+        }
+        for (int i = 0; i < MotorNum; i++) {
+            ControlMotor.get(i).setTargetPosition(MotorAction.get(thisAction).intValue());
+            ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            ControlMotor.get(i).setPower(powerLimit);
+        }
+        MotorState = thisAction;
+
     }
 
     /**
@@ -183,14 +175,9 @@ public class MotorEx implements RunnableStructUnit , Lockable {
      * @param Power 功率
      */
     public void setPower(double Power) {
-        lock.lock();
-        try {
-            for (int i = 0; i < MotorNum; i++) {
-                ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-                ControlMotor.get(i).setPower(Power);
-            }
-        } finally {
-            lock.unlock();
+        for (int i = 0; i < MotorNum; i++) {
+            ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            ControlMotor.get(i).setPower(Power);
         }
     }
 
@@ -214,16 +201,12 @@ public class MotorEx implements RunnableStructUnit , Lockable {
      * @param TemporaryPosition 电机需要执行的位置
      */
     public void setTemporaryPosition(int TemporaryPosition) {
-        lock.lock();
-        try {
-            for (int i = 0; i < MotorNum; i++) {
-                ControlMotor.get(i).setTargetPosition(TemporaryPosition);
-                ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_TO_POSITION);
-            }
-            MotorState = InTemporary;
-        } finally {
-            lock.unlock();
+        for (int i = 0; i < MotorNum; i++) {
+            ControlMotor.get(i).setTargetPosition(TemporaryPosition);
+            ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_TO_POSITION);
         }
+        MotorState = InTemporary;
+
     }
 
     /**
