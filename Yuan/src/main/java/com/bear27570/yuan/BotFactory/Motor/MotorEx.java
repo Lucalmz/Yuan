@@ -35,6 +35,7 @@ public class MotorEx implements RunnableStructUnit, Lockable {
     private final int MotorNum;
     private final ArrayList<ConfigDirectionPair> Config;
     private final HashMap<Action, Double> MotorAction;
+    private final HashMap<Action, Double> PowerAction;
     protected static HardwareMap hardwareMap;
     private volatile Action MotorState = Init;
     private final Action InitState;
@@ -68,6 +69,7 @@ public class MotorEx implements RunnableStructUnit, Lockable {
         MotorNum = Builder.MotorName.size();
         hardwareMap = Builder.hardwareMap;
         this.MotorAction = new HashMap<>(Builder.actionMap);
+        this.PowerAction = new HashMap<>(Builder.powerMap);
         Config = new ArrayList<>(Builder.MotorName);
         for (int i = 0; i < MotorNum; i++) {
             ControlMotor.add(hardwareMap.get(DcMotorEx.class, Config.get(i).getConfig()));
@@ -139,17 +141,18 @@ public class MotorEx implements RunnableStructUnit, Lockable {
      * @param powerLimit 功率限制
      */
     public void actWithPowerLimit(Action thisAction, double powerLimit) {
-        Action requestState = MotorState;
-        if (requestState != MotorState) {
-            return;
-        }
+        lock.lock();
         if (!MotorAction.containsKey(thisAction)) {
             throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
         }
-        for (int i = 0; i < MotorNum; i++) {
-            ControlMotor.get(i).setTargetPosition(MotorAction.get(thisAction).intValue());
-            ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_TO_POSITION);
-            ControlMotor.get(i).setPower(powerLimit);
+        try {
+            for (int i = 0; i < MotorNum; i++) {
+                ControlMotor.get(i).setTargetPosition(MotorAction.get(thisAction).intValue());
+                ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_TO_POSITION);
+                ControlMotor.get(i).setPower(powerLimit);
+            }
+        }finally {
+            lock.unlock();
         }
         MotorState = thisAction;
 
@@ -175,9 +178,27 @@ public class MotorEx implements RunnableStructUnit, Lockable {
      * @param Power 功率
      */
     public void setPower(double Power) {
-        for (int i = 0; i < MotorNum; i++) {
-            ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            ControlMotor.get(i).setPower(Power);
+        lock.lock();
+        try {
+            for (int i = 0; i < MotorNum; i++) {
+                ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+                ControlMotor.get(i).setPower(Power);
+            }
+        }finally {
+            lock.unlock();
+        }
+    }
+    public void powerAct(Action act){
+        lock.lock();
+        try {
+            if (!MotorAction.containsKey(act)) {
+                throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
+            }
+            for (int i = 0; i < MotorNum; i++) {
+                ControlMotor.get(i).setPower(PowerAction.get(act));
+            }
+        }finally {
+            lock.unlock();
         }
     }
 
@@ -278,6 +299,7 @@ public class MotorEx implements RunnableStructUnit, Lockable {
     public static class MotorBuilder {
         private ArrayList<ConfigDirectionPair> MotorName = new ArrayList<>();
         private Map<Action, Double> actionMap;
+        private Map<Action, Double> powerMap;
         private final HardwareMap hardwareMap;
         private SwitcherPair switcher;
         private final Action InitState;
@@ -360,6 +382,10 @@ public class MotorEx implements RunnableStructUnit, Lockable {
          */
         public MotorBuilder addAction(Action actionType, int position) {
             actionMap.put(actionType, (double) position);
+            return this;
+        }
+        public MotorBuilder addPowerAction(Action action, double power){
+            powerMap.put(action, power);
             return this;
         }
 

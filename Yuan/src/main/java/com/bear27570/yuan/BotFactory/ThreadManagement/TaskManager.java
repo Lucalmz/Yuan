@@ -92,7 +92,7 @@ public class TaskManager {
                     task.getInInterruptCleanUp().run();
                     Thread.currentThread().interrupt(); // 保持线程的中断状态
                 } else {
-                    System.out.println("  [THREAD] 💥任务执行时发生未知错误: " + e.getMessage());
+                    throw e;
                 }
             } finally {
                 task.getRequirements().forEach(Lockable::unlock);
