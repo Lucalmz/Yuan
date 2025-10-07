@@ -2,6 +2,7 @@ package com.bear27570.yuan.BotFactory.Servo;
 
 import androidx.annotation.NonNull;
 
+import com.bear27570.yuan.AdvantageCoreLib.Logging.Logger;
 import com.bear27570.yuan.BotFactory.Interface.Lockable;
 import com.bear27570.yuan.BotFactory.Model.Action;
 import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
@@ -32,6 +33,7 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 @ThreadSafe
 public class ServoEx implements RunnableStructUnit, Lockable {
+    private final String DeviceName;
     private final ArrayList<Servo> ControlServo = new ArrayList<>();
     private final int ServoNum;
     private final ElapsedTime timer;
@@ -59,6 +61,7 @@ public class ServoEx implements RunnableStructUnit, Lockable {
     private final PriorityBlockingQueue<Task> taskQueue = new PriorityBlockingQueue<>();
     private boolean isSwitcherAssigned = false;
     public Thread workerThread;
+    private final Logger logger;
 
     /**
      * 获取等待队列
@@ -91,6 +94,7 @@ public class ServoEx implements RunnableStructUnit, Lockable {
      * @param Builder 实现builder生成器架构
      */
     private ServoEx(@NonNull ServoBuilder Builder) {
+        DeviceName = Builder.DeviceName;
         ServoNum = Builder.servoName.size();
         hardwareMap = Builder.hardwareMap;
         this.ServoAction = new HashMap<>(Builder.actionMap);
@@ -111,10 +115,14 @@ public class ServoEx implements RunnableStructUnit, Lockable {
         this.workerThread = new Thread(this::velocityControlLoop);
         this.workerThread.setPriority(Thread.MAX_PRIORITY);
         this.workerThread.start();
+        this.logger = Logger.getINSTANCE();
     }
 
     private double getCalculatedPosition() {
         return targetPosition;
+    }
+    public void Periodic() {
+
     }
 
     /**
@@ -124,6 +132,7 @@ public class ServoEx implements RunnableStructUnit, Lockable {
      */
     public void setVelocity(double degreesPerSecond) {
         this.targetVelocityDegPerSec = degreesPerSecond;
+
     }
 
     /**
@@ -250,11 +259,16 @@ public class ServoEx implements RunnableStructUnit, Lockable {
      * @throws InterruptedException 阻塞可以被打断
      */
     public void PatientAct(Action thisAction) throws InterruptedException {
-        if (!IsPatienceAvailable) {
-            throw new IllegalArgumentException("You can't use patient act because you haven't registered your servo's velocity");
+        lock.lock();
+        try {
+            if (!IsPatienceAvailable) {
+                throw new IllegalArgumentException("You can't use patient act because you haven't registered your servo's velocity");
+            }
+            act(thisAction);
+            TimeUnit.MILLISECONDS.sleep(thisActionWaitingSec);
+        }finally {
+            lock.unlock();
         }
-        act(thisAction);
-        TimeUnit.MILLISECONDS.sleep(thisActionWaitingSec);
     }
 
     /**
@@ -376,6 +390,7 @@ public class ServoEx implements RunnableStructUnit, Lockable {
      * 使用了Builder构型，链式调用满足不定项输入需求
      */
     public static class ServoBuilder {
+        private String DeviceName;
         private final ArrayList<ConfigDirectionPair> servoName = new ArrayList<>();
         private final Map<Action, Double> actionMap;
         private final HardwareMap hardwareMap;
@@ -401,6 +416,13 @@ public class ServoEx implements RunnableStructUnit, Lockable {
             this.actionMap.put(InitAct, InitPosition);
             this.InitState = InitAct;
             this.hardwareMap = hardwareMap;
+        }
+        /**
+         * 设置舵机组名称
+         */
+        public ServoBuilder setDeviceName(String Name){
+            DeviceName = Name;
+            return this;
         }
 
         /**

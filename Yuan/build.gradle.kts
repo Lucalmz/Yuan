@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "io.github.bear27570"
-version = "1.2.4"
+version = "1.3.0"
 
 android {
     namespace = "com.bear27570.yuan"

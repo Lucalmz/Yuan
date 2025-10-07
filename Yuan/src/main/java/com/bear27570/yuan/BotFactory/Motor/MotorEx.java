@@ -3,11 +3,13 @@ package com.bear27570.yuan.BotFactory.Motor;
 import androidx.annotation.NonNull;
 
 import com.bear27570.yuan.BotFactory.Interface.Lockable;
+import com.bear27570.yuan.BotFactory.Interface.PeriodicRunnable;
 import com.bear27570.yuan.BotFactory.Model.Action;
 import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
 import com.bear27570.yuan.BotFactory.ThreadManagement.Task;
+import com.bear27570.yuan.AdvantageCoreLib.Logging.Logger;
 import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -30,7 +32,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author LucaLi
  */
 @ThreadSafe
-public class MotorEx implements RunnableStructUnit, Lockable {
+public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
+    private final String DeviceName;
     private final ArrayList<DcMotorEx> ControlMotor = new ArrayList<>();
     private final int MotorNum;
     private final ArrayList<ConfigDirectionPair> Config;
@@ -43,6 +46,7 @@ public class MotorEx implements RunnableStructUnit, Lockable {
     private final ReentrantLock lock = new ReentrantLock();
     private final PriorityBlockingQueue<Task> taskQueue = new PriorityBlockingQueue<>();
     private final boolean isSwitcherAssigned;
+    private final Logger logger;
 
     public boolean tryLock() {
         return lock.tryLock();
@@ -66,6 +70,7 @@ public class MotorEx implements RunnableStructUnit, Lockable {
      * @param Builder 实现builder生成器架构
      */
     public MotorEx(@NonNull MotorBuilder Builder) {
+        this.DeviceName = Builder.deviceName;
         MotorNum = Builder.MotorName.size();
         hardwareMap = Builder.hardwareMap;
         this.MotorAction = new HashMap<>(Builder.actionMap);
@@ -80,8 +85,19 @@ public class MotorEx implements RunnableStructUnit, Lockable {
         isSwitcherAssigned = Builder.isSwitcherSet;
         InitState = Builder.InitState;
         switcher = Builder.switcher;
+        this.logger = Logger.getINSTANCE();
     }
-
+    @Override
+    public void periodic(){
+        for (int i = 0; i < MotorNum; i++) {
+            DcMotorEx motor = ControlMotor.get(i);
+            String motorSpecificName = getConfig(i);
+            logger.logDouble(DeviceName+" "+motorSpecificName + "/positionTicks", motor.getCurrentPosition());
+            logger.logDouble(DeviceName+" "+motorSpecificName + "/velocityTps", motor.getVelocity());
+            logger.logDouble(DeviceName+" "+motorSpecificName + "/powerApplied", motor.getPower());
+            logger.logBoolean(DeviceName+" "+motorSpecificName + "/zeroPowerBehavior",motor.getZeroPowerBehavior()==DcMotor.ZeroPowerBehavior.BRAKE);
+        }
+    }
     /**
      * 初始化电机操作
      * ZeroPowerBehavior Brake
@@ -115,9 +131,15 @@ public class MotorEx implements RunnableStructUnit, Lockable {
 
     @Override
     public void PatientAct(Action thisAction) throws InterruptedException {
-        act(thisAction);
-        while (isBusy()) {
-            Thread.sleep(5);
+        lock.lock();
+        try {
+            act(thisAction);
+            logger.logDouble(DeviceName+" "+getConfig(0)+"/commandedPatientAct",MotorAction.get(thisAction));
+            while (isBusy()) {
+                Thread.sleep(5);
+            }
+        }finally {
+            lock.unlock();
         }
     }
 
@@ -129,6 +151,7 @@ public class MotorEx implements RunnableStructUnit, Lockable {
     public void SetZeroPowerBehavior(DcMotor.ZeroPowerBehavior ZeroPowerBehavior) {
         for (int i = 0; i < MotorNum; i++) {
             ControlMotor.get(i).setZeroPowerBehavior(ZeroPowerBehavior);
+            logger.logBoolean(DeviceName+" "+getConfig(i)+"/commandedZeroPowerBehavior",ZeroPowerBehavior==DcMotor.ZeroPowerBehavior.BRAKE);
         }
     }
 
@@ -147,9 +170,14 @@ public class MotorEx implements RunnableStructUnit, Lockable {
         }
         try {
             for (int i = 0; i < MotorNum; i++) {
+                double targetPosition = MotorAction.get(thisAction);
+                String motorName = getConfig(i);
                 ControlMotor.get(i).setTargetPosition(MotorAction.get(thisAction).intValue());
                 ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_TO_POSITION);
                 ControlMotor.get(i).setPower(powerLimit);
+                logger.logDouble(DeviceName+" "+motorName + "/commandedPosition", targetPosition);
+                logger.logDouble(DeviceName+" "+motorName + "/commandedPower_posCtrl", powerLimit);
+                logger.logString(DeviceName+" "+motorName + "/commandedAction", thisAction.name());
             }
         }finally {
             lock.unlock();
@@ -183,20 +211,25 @@ public class MotorEx implements RunnableStructUnit, Lockable {
             for (int i = 0; i < MotorNum; i++) {
                 ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_USING_ENCODER);
                 ControlMotor.get(i).setPower(Power);
+                logger.logDouble(DeviceName+" "+getConfig(i) + "/commandedSetTempPower", Power);
             }
         }finally {
             lock.unlock();
         }
+        MotorState = PowerRunning;
     }
     public void powerAct(Action act){
         lock.lock();
         try {
-            if (!MotorAction.containsKey(act)) {
+            if (!PowerAction.containsKey(act)) {
                 throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
             }
+            logger.logDouble(DeviceName+" "+getConfig(0)+"/commandedPowerAct",PowerAction.get(act));
+            logger.logString(DeviceName+" "+getConfig(0) + "/commandedAction", act.name());
             for (int i = 0; i < MotorNum; i++) {
                 ControlMotor.get(i).setPower(PowerAction.get(act));
             }
+            MotorState = act;
         }finally {
             lock.unlock();
         }
@@ -225,6 +258,11 @@ public class MotorEx implements RunnableStructUnit, Lockable {
         for (int i = 0; i < MotorNum; i++) {
             ControlMotor.get(i).setTargetPosition(TemporaryPosition);
             ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            ControlMotor.get(i).setPower(1);
+            String motorName = getConfig(i);
+            logger.logDouble(DeviceName+" "+motorName + "/commandedPosition", TemporaryPosition);
+            logger.logDouble(DeviceName+" "+motorName + "/commandedPower_posCtrl", 1);
+            logger.logString(DeviceName+" "+motorName + "/commandedAction", InTemporary.name());
         }
         MotorState = InTemporary;
 
@@ -297,6 +335,7 @@ public class MotorEx implements RunnableStructUnit, Lockable {
      * 使用了Builder构型，链式调用满足不定项输入需求
      */
     public static class MotorBuilder {
+        private String deviceName = null;
         private ArrayList<ConfigDirectionPair> MotorName = new ArrayList<>();
         private Map<Action, Double> actionMap;
         private Map<Action, Double> powerMap;
@@ -319,6 +358,14 @@ public class MotorEx implements RunnableStructUnit, Lockable {
             this.actionMap.put(InitAct, (double) InitPosition);
             this.InitState = InitAct;
             this.hardwareMap = hardwareMap;
+        }
+
+        /**
+         * 设置整个电机组的名称便于Log区分
+         */
+        public MotorBuilder setDeviceName(String Name){
+            deviceName = Name;
+            return this;
         }
 
         /**

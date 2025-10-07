@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  */
 public class GamepadValue {
     private double nowPosition,lastPosition;
+    private double velocity;
     private ElapsedTime PressTimer = new ElapsedTime();
 
     /**
@@ -34,7 +35,13 @@ public class GamepadValue {
     protected void update(double currentValue){
         this.lastPosition = this.nowPosition;
         this.nowPosition = currentValue;
+        double deltaTime = PressTimer.milliseconds();
         PressTimer.reset();
+        if(deltaTime > 0){
+            velocity = (this.nowPosition-this.lastPosition) /deltaTime;
+        }else{
+            velocity = 0;
+        }
     }
 
     /**
@@ -42,8 +49,7 @@ public class GamepadValue {
      * @return 位置变化速度，v=Δx/Δt
      */
     public double PressVelocity(){
-        double c = nowPosition-lastPosition;
-        return c/PressTimer.milliseconds();
+        return velocity;
     }
 
     /**

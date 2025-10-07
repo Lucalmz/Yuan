@@ -71,7 +71,7 @@ public class StructureGroup{
         }
     }
     public static class StructureBuilder {
-        private ArrayList<Lockable> Unit;
+        private final ArrayList<Lockable> Unit = new ArrayList<>();
 
         /**
          * 空参构造，无特殊必须的参数
