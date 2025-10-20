@@ -132,4 +132,60 @@ public class ServoBuilders {
     public static class CRServoBuilder {
 
     }
+    public static class NormalCRServoBuilder {
+        protected String deviceName;
+        protected final String servoName;
+        protected boolean isReversed = false;
+        protected final Map<Action, Double> actionMap;
+        protected final HardwareMap hardwareMap;
+        protected SwitcherPair switcher;
+        protected final Action initState;
+        protected boolean isSwitcherSet = false;
+
+        protected final double maxVelocity; // in degrees per second
+        protected final int degreeRange;
+
+        public NormalCRServoBuilder(String servoName, Action initAct, double initPosition, boolean isReversed, int degreeRange, double maxVelocity, HardwareMap hardwareMap) {
+            if (maxVelocity <= 0) throw new IllegalArgumentException("Max velocity must be a positive value.");
+
+            this.servoName = servoName;
+            this.isReversed = isReversed;
+            this.degreeRange = degreeRange;
+            this.maxVelocity = maxVelocity;
+            this.hardwareMap = hardwareMap;
+            this.actionMap = new HashMap<>();
+            this.actionMap.put(initAct, initPosition);
+            this.initState = initAct;
+            this.deviceName = servoName; // Default device name to servo name
+        }
+
+        public NormalCRServoBuilder setDeviceName(String Name) {
+            this.deviceName = Name;
+            return this;
+        }
+
+        public NormalCRServoBuilder addAction(Action actionType, double positionInDegrees) {
+            actionMap.put(actionType, positionInDegrees);
+            return this;
+        }
+
+        public NormalCRServoBuilder setSwitcher(Action switch1, Action switch2) {
+            if (isSwitcherSet) {
+                throw new IllegalStateException("Switcher should only be assigned once.");
+            }
+            if (!actionMap.containsKey(switch1) || !actionMap.containsKey(switch2)) {
+                throw new IllegalArgumentException("Both switcher actions must be defined with addAction() before setting the switcher.");
+            }
+            this.switcher = SwitcherPair.GetSwitcherPair(switch1, switch2);
+            this.isSwitcherSet = true;
+            return this;
+        }
+
+        public NormalCRServo build() {
+            if (!isSwitcherSet) {
+                this.switcher = SwitcherPair.GetSwitcherPair(null, null);
+            }
+            return new NormalCRServo(this);
+        }
+    }
 }
