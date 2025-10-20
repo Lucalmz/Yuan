@@ -4,6 +4,8 @@ import androidx.annotation.NonNull;
 
 import com.bear27570.yuan.AdvantageCoreLib.Logging.Logger;
 import com.bear27570.yuan.BotFactory.Interface.Lockable;
+import com.bear27570.yuan.BotFactory.Interface.PeriodicRunnable;
+import com.bear27570.yuan.BotFactory.Interface.ServoEx;
 import com.bear27570.yuan.BotFactory.Model.Action;
 import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
@@ -20,7 +22,6 @@ import static com.bear27570.yuan.BotFactory.Model.Action.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -32,7 +33,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author LucaLi
  */
 @ThreadSafe
-public class ServoEx implements RunnableStructUnit, Lockable {
+public class PWMServo implements RunnableStructUnit, Lockable, ServoEx, PeriodicRunnable {
     private final String DeviceName;
     private final ArrayList<Servo> ControlServo = new ArrayList<>();
     private final int ServoNum;
@@ -46,6 +47,7 @@ public class ServoEx implements RunnableStructUnit, Lockable {
     private volatile double currentPosition;
     private final ArrayList<ConfigDirectionPair> Config;
     private final HashMap<Action, Double> ServoAction;
+    private final HashMap<Action, Double> ServoVelAction;
     private final SwitcherPair switcher;
     protected static HardwareMap hardwareMap;
     private volatile Action ServoState = Init;
@@ -93,11 +95,12 @@ public class ServoEx implements RunnableStructUnit, Lockable {
      *
      * @param Builder 实现builder生成器架构
      */
-    private ServoEx(@NonNull ServoBuilder Builder) {
+    PWMServo(@NonNull ServoBuilders.PWMServoBuilder Builder) {
         DeviceName = Builder.DeviceName;
         ServoNum = Builder.servoName.size();
         hardwareMap = Builder.hardwareMap;
         this.ServoAction = new HashMap<>(Builder.actionMap);
+        this.ServoVelAction = new HashMap<>(Builder.velActionMap);
         Config = new ArrayList<>(Builder.servoName);
         for (int i = 0; i < ServoNum; i++) {
             ControlServo.add(hardwareMap.get(Servo.class, Config.get(i).getConfig()));
@@ -116,13 +119,16 @@ public class ServoEx implements RunnableStructUnit, Lockable {
         this.workerThread.setPriority(Thread.MAX_PRIORITY);
         this.workerThread.start();
         this.logger = Logger.getINSTANCE();
+        this.targetVelocityDegPerSec = this.ServoMaxVel;
     }
 
     private double getCalculatedPosition() {
         return targetPosition;
     }
-    public void Periodic() {
 
+    public void periodic() {
+        logger.logDouble(DeviceName+" "+getConfig(0)+"/commandedPosition", getCalculatedPosition());
+        logger.logString(DeviceName+" "+getConfig(0)+"/commandedAction", ServoState.name());
     }
 
     /**
@@ -132,7 +138,6 @@ public class ServoEx implements RunnableStructUnit, Lockable {
      */
     public void setVelocity(double degreesPerSecond) {
         this.targetVelocityDegPerSec = degreesPerSecond;
-
     }
 
     /**
@@ -164,8 +169,12 @@ public class ServoEx implements RunnableStructUnit, Lockable {
         }
         lock.lock();
         try {
+            thisActionWaitingSec = TimeServices.GetServoWaitMillSec(TemporaryPosition, this);
             for (int i = 0; i < ServoNum; i++) {
                 ControlServo.get(i).setPosition(TemporaryPosition);
+                logger.logDouble(DeviceName+" "+getConfig(i)+"/commandedPosition", TemporaryPosition);
+                logger.logString(DeviceName+" "+getConfig(i) + "/commandedAction", InTemporary.name());
+                logger.logDouble(DeviceName + "/commandedDuration", TimeUnit.MILLISECONDS.toSeconds(thisActionWaitingSec));
             }
             ServoPosition = TemporaryPosition;
             ServoState = InTemporary;
@@ -201,9 +210,14 @@ public class ServoEx implements RunnableStructUnit, Lockable {
         }
     }
 
+    /**
+     * 设置临时速度
+     * @param DegPerSec 目标速度
+     */
     public void actWithVel(double DegPerSec) {
         timer.reset();
         setVelocity(DegPerSec);
+        logger.logDouble(DeviceName+" "+getConfig(0)+"/commandedVelocity", targetVelocityDegPerSec);
         isVelControlRunning = true;
     }
 
@@ -213,6 +227,7 @@ public class ServoEx implements RunnableStructUnit, Lockable {
             timer.reset();
             setVelocity(DegPerSec);
             isVelControlRunning = true;
+            logger.logDouble(DeviceName+" "+getConfig(0)+"/commandedVelocity", targetVelocityDegPerSec);
             while (isVelControlRunning) {
                 movementFinished.await();
             }
@@ -226,6 +241,7 @@ public class ServoEx implements RunnableStructUnit, Lockable {
     public void StopVelTurning() {
         this.isVelControlRunning = false;
         setVelocity(0);
+        logger.logDouble(DeviceName+" "+getConfig(0)+"/commandedVelocity", targetVelocityDegPerSec);
     }
 
     /**
@@ -236,17 +252,23 @@ public class ServoEx implements RunnableStructUnit, Lockable {
      */
     @Override
     public void act(Action thisAction) {
-        if (!ServoAction.containsKey(thisAction)) {
+        if (!ServoAction.containsKey(thisAction)&&!ServoVelAction.containsKey(thisAction)) {
             throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
         }
         lock.lock();
         try {
-            for (int i = 0; i < ServoNum; i++) {
-                ControlServo.get(i).setPosition(ServoAction.get(thisAction));
+            if(ServoVelAction.containsKey(thisAction)) {
+                thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction, this);
+                for (int i = 0; i < ServoNum; i++) {
+                    ControlServo.get(i).setPosition(ServoAction.get(thisAction).doubleValue());
+                    logger.logDouble(DeviceName + "/commandedDuration", TimeUnit.MILLISECONDS.toSeconds(thisActionWaitingSec));
+                    logger.logDouble(DeviceName + " " + getConfig(i) + "/commandedPosition", ServoAction.get(thisAction).doubleValue());
+                }
+                ServoState = thisAction;
+                currentPosition = ServoAction.get(thisAction).doubleValue();
+                return;
             }
-            thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction, this);
-            ServoState = thisAction;
-            currentPosition = ServoAction.get(thisAction);
+            actWithVel(ServoVelAction.get(thisAction).doubleValue());
         }finally {
             lock.unlock();
         }
@@ -270,7 +292,6 @@ public class ServoEx implements RunnableStructUnit, Lockable {
             lock.unlock();
         }
     }
-
     /**
      * 获取当前动作需要等待的时间
      */
@@ -333,7 +354,7 @@ public class ServoEx implements RunnableStructUnit, Lockable {
      * @param target 需要获取的Action名称
      * @return 舵机对应的位置
      */
-    public Double getActionPosition(Action target) {
+    public double getActionPosition(Action target) {
         if (target == InTemporary) {
             return ServoPosition;
         }
@@ -383,116 +404,6 @@ public class ServoEx implements RunnableStructUnit, Lockable {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-        }
-    }
-
-    /**
-     * 使用了Builder构型，链式调用满足不定项输入需求
-     */
-    public static class ServoBuilder {
-        private String DeviceName;
-        private final ArrayList<ConfigDirectionPair> servoName = new ArrayList<>();
-        private final Map<Action, Double> actionMap;
-        private final HardwareMap hardwareMap;
-        private SwitcherPair switcher;
-        private final Action InitState;
-        private double ServoVel;
-        private int DegRange;
-        private boolean isPatienceAvailable;
-        private boolean isSwitcherSet;
-
-        public ServoBuilder(String ConfigName1, double InitPosition, boolean isReverse, HardwareMap hardwareMap) {
-            this.servoName.add(new ConfigDirectionPair(ConfigName1, isReverse));
-            this.actionMap = new HashMap<>();
-            this.actionMap.put(Init, InitPosition);
-            this.InitState = Init;
-            this.hardwareMap = hardwareMap;
-
-        }
-
-        public ServoBuilder(String ConfigName1, Action InitAct, double InitPosition, boolean isReverse, HardwareMap hardwareMap) {
-            this.servoName.add(new ConfigDirectionPair(ConfigName1, isReverse));
-            this.actionMap = new HashMap<>();
-            this.actionMap.put(InitAct, InitPosition);
-            this.InitState = InitAct;
-            this.hardwareMap = hardwareMap;
-        }
-        /**
-         * 设置舵机组名称
-         */
-        public ServoBuilder setDeviceName(String Name){
-            DeviceName = Name;
-            return this;
-        }
-
-        /**
-         * 设置该舵机转速以用于自动等待方法
-         *
-         * @param SecPer60Deg 每60度需要几秒
-         * @param DegRange    舵机角度
-         * @return 当前Builder实例，实现链式调用
-         */
-        public ServoBuilder SetServoMaxVelAndRange(double SecPer60Deg, int DegRange) {
-            this.ServoVel = SecPer60Deg;
-            this.DegRange = DegRange;
-            this.isPatienceAvailable = true;
-            return this;
-        }
-
-        /**
-         * 给这个封装添加一个新的同步舵机
-         *
-         * @param newConfigName 添加舵机的名称
-         * @param isReverse     是否反向
-         * @return 当前Builder实例，实现链式调用
-         */
-        public ServoBuilder addServo(String newConfigName, boolean isReverse) {
-            servoName.add(new ConfigDirectionPair(newConfigName, isReverse));
-            return this;
-        }
-
-        /**
-         * 添加一个动作及其对应的Servo位置。
-         *
-         * @param actionType 动作的枚举类型
-         * @param position   Servo的目标位置 (通常0.0到1.0之间)
-         * @return 当前Builder实例，实现链式调用
-         */
-        public ServoBuilder addAction(Action actionType, double position) {
-            if (position < 0.0 || position > 1.0) {
-                throw new IllegalArgumentException("Servo position must be between 0.0 and 1.0");
-            }
-            actionMap.put(actionType, position);
-            return this;
-        }
-
-
-        /**
-         * 设置便捷转换方式
-         *
-         * @param switch1 第一个switch需要的动作(任意位置只要调用switch就会回到该位置）
-         * @param switch2 第二个switch需要的动作
-         * @return 当前Builder实例，实现链式调用
-         */
-        public ServoBuilder setSwitcher(Action switch1, Action switch2) {
-            if (isSwitcherSet) {
-                throw new IllegalArgumentException("Switcher should only be assigned for once.");
-            }
-            switcher = SwitcherPair.GetSwitcherPair(switch1, switch2);
-            isSwitcherSet = true;
-            return this;
-        }
-
-        /**
-         * 构建并返回一个 ServoFactory 实例。
-         *
-         * @return 构建好的 ServoFactory 对象
-         */
-        public ServoEx build() {
-            if (!isSwitcherSet) {
-                switcher = SwitcherPair.GetSwitcherPair(null, null);
-            }
-            return new ServoEx(this);
         }
     }
 }

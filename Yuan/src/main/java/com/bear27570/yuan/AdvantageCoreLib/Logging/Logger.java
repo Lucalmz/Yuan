@@ -1,5 +1,7 @@
 package com.bear27570.yuan.AdvantageCoreLib.Logging;
 
+import android.os.Environment;
+
 import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 
 import java.io.*;
@@ -56,7 +58,7 @@ public class Logger {
             }
 
             // 创建日志文件
-            File logDir = new File("/sdcard/FIRST/AdvantageLogs/");
+            File logDir = new File(Environment.getExternalStorageDirectory() + "/FIRST/AdvantageLogs/");
             logDir.mkdirs(); // 确保文件夹存在
             String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
             File logFile = new File(logDir, "log_" + timestamp + ".advlog");
@@ -128,7 +130,6 @@ public class Logger {
             }
         }
     }
-
     /**
      * 关闭logger，释放文件资源。必须在OpMode的stop()中调用！
      */

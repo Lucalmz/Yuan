@@ -8,7 +8,7 @@ import com.bear27570.yuan.BotFactory.Model.LockableActPair;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
 import com.bear27570.yuan.BotFactory.Motor.MotorEx;
-import com.bear27570.yuan.BotFactory.Servo.ServoEx;
+import com.bear27570.yuan.BotFactory.Servo.PWMServo;
 import com.bear27570.yuan.BotFactory.ThreadManagement.Task;
 import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 
@@ -255,7 +255,7 @@ public class StructureLink implements Lockable {
          * @param servo 这个结构中的一个电机
          * @return 当前Builder实例，实现链式调用
          */
-        public StructureBuilder add(ServoEx servo) {
+        public StructureBuilder add(PWMServo servo) {
             this.RSU.add(servo);
             this.LockList.add(servo);
             return this;
@@ -290,7 +290,7 @@ public class StructureLink implements Lockable {
 
         /**
          * 为当前结构添加安全性检查，添加执行动作时结构外的可能对该结构动作产生影响的结构所应处于的位置
-         *
+         * Don't use this while safety check will be used in `act`. Do safety check in your code.
          * @param StructAct   当执行该动作时需要安全检查
          * @param AttachUnit 需要被安全检查的结构单元
          * @param SafeAct     该舵机需要的状态
