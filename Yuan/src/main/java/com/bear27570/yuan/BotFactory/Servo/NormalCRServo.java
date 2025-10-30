@@ -10,6 +10,7 @@ import com.bear27570.yuan.BotFactory.Model.Action;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
 import com.bear27570.yuan.BotFactory.ThreadManagement.Task;
 import com.bear27570.yuan.AdvantageCoreLib.Logging.Logger;
+import com.bear27570.yuan.BotFactory.Services.TimeServices;
 import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -17,7 +18,6 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -26,8 +26,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import static com.bear27570.yuan.BotFactory.Model.Action.*;
 
 /**
- * A thread-safe wrapper for a standard CRServo that estimates its position based on velocity.
- * This class uses a dedicated background thread for timed motor control, in a style similar to PWMServo.
+ * A thread-safe wrapper for a CRServo that estimates position and mimics the control logic of PWMServo.
+ * It uses a dedicated background thread for continuous velocity and position management.
  *
  * @author LucaLi
  */
@@ -41,27 +41,27 @@ public class NormalCRServo implements ServoEx, PeriodicRunnable, RunnableStructU
 
     private volatile Action servoState = Init;
     private final Action initState;
-    private final double initPosition;
 
-    // Position and Velocity State
+    // --- Control State ---
     private volatile double currentPositionDegrees;
     private volatile double targetPositionDegrees;
-    private volatile double operatingVelocityDegPerSec = -1.0; // Must be set by user
-    private final double maxVelocityDegPerSec;
-    private final int degreeRange;
-    private long movementDurationMillis = 0;
+    private volatile double targetVelocityDegPerSec;
+    private final double ServoMaxVel;
+    private final int DegRange = Integer.MAX_VALUE; // CR Servos have a virtually infinite range
+    private long thisActionWaitingSec = 0;
+    public volatile boolean isVelControlRunning = false;
+    private volatile boolean isPositionMovementActive = false;
+    private final int updateIntervalMillis = 10; // Update rate for the control loop
 
-    // Concurrency and Threading
+    // --- Concurrency & Threading ---
     private final ReentrantLock lock = new ReentrantLock();
-    private final Condition commandReceived = lock.newCondition();
     private final Condition movementFinished = lock.newCondition();
-    private final PriorityBlockingQueue<Task> taskQueue = new PriorityBlockingQueue<>();
-    private final Thread workerThread;
-    private volatile boolean isMovementRequested = false;
+    public Thread workerThread;
 
     private final SwitcherPair switcher;
     private final boolean isSwitcherAssigned;
     private final Logger logger;
+    private final ElapsedTime timer;
 
     public NormalCRServo(@NonNull ServoBuilders.NormalCRServoBuilder builder) {
         this.DeviceName = builder.deviceName;
@@ -73,26 +73,23 @@ public class NormalCRServo implements ServoEx, PeriodicRunnable, RunnableStructU
             controlServo.setDirection(DcMotorSimple.Direction.REVERSE);
         }
 
-        this.maxVelocityDegPerSec = builder.maxVelocity;
-        this.degreeRange = builder.degreeRange;
+        this.ServoMaxVel = builder.maxVelocity;
+        this.targetVelocityDegPerSec = this.ServoMaxVel; // Default to max velocity
 
         this.isSwitcherAssigned = builder.isSwitcherSet;
         this.initState = builder.initState;
-        this.initPosition = positionAction.get(initState);
+        // Set initial position based on initState
+        this.currentPositionDegrees = positionAction.getOrDefault(initState, 0.0);
+        this.targetPositionDegrees = this.currentPositionDegrees;
 
         this.switcher = builder.switcher;
         this.logger = Logger.getINSTANCE();
+        this.timer = new ElapsedTime();
 
         // Initialize and start the dedicated worker thread
-        this.workerThread = new Thread(this::movementControlLoop);
+        this.workerThread = new Thread(this::velocityControlLoop);
         this.workerThread.setPriority(Thread.MAX_PRIORITY);
         this.workerThread.start();
-    }
-
-    //<editor-fold desc="Locking and Threading Interface">
-    @Override
-    public PriorityBlockingQueue<Task> getWaitingQueue() {
-        return taskQueue;
     }
 
     @Override
@@ -111,108 +108,69 @@ public class NormalCRServo implements ServoEx, PeriodicRunnable, RunnableStructU
     }
     //</editor-fold>
 
-    //<editor-fold desc="Core Control Loop (Worker Thread)">
-    private void movementControlLoop() {
-        ElapsedTime movementTimer = new ElapsedTime();
-
+    private void velocityControlLoop() {
+        timer.reset();
         while (!Thread.currentThread().isInterrupted()) {
-            double powerToSet = 0;
-            long timeToWait = 0;
-            double velocityForMove = 0;
+            double powerToSet = 0.0;
+            double timeElapsedSec = timer.seconds();
+            timer.reset();
 
+            lock.lock();
             try {
-                lock.lock();
-                // Wait until a movement is requested
-                while (!isMovementRequested) {
-                    commandReceived.await();
+                // Update estimated position based on last cycle's power
+                double lastPower = controlServo.getPower();
+                if (Math.abs(lastPower) > 0.01) {
+                    double direction = Math.signum(lastPower) * (isReversed ? -1 : 1);
+                    currentPositionDegrees += timeElapsedSec * targetVelocityDegPerSec * direction;
                 }
 
-                // A command was received, prepare for movement
-                isMovementRequested = false;
-                double distanceToTarget = targetPositionDegrees - currentPositionDegrees;
-
-                if (Math.abs(distanceToTarget) > 0.1) { // Only move if significant
-                    powerToSet = Math.signum(distanceToTarget) * (isReversed ? -1 : 1);
-                    timeToWait = this.movementDurationMillis;
-                    velocityForMove = operatingVelocityDegPerSec;
+                // --- Determine motor power for this cycle ---
+                if (isVelControlRunning) {
+                    // Mode 1: Velocity Control
+                    powerToSet = Math.signum(targetVelocityDegPerSec);
+                } else if (isPositionMovementActive) {
+                    // Mode 2: Position Control
+                    double positionError = targetPositionDegrees - currentPositionDegrees;
+                    if (Math.abs(positionError) > 1.0) { // Tolerance of 1.0 degree
+                        powerToSet = Math.signum(positionError);
+                    } else {
+                        // Target reached
+                        isPositionMovementActive = false;
+                        movementFinished.signalAll(); // Signal completion
+                    }
                 }
 
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt(); // Preserve interrupted status
-                break;
+                if (isReversed) {
+                    powerToSet *= -1;
+                }
+                controlServo.setPower(powerToSet);
+
             } finally {
                 lock.unlock();
             }
 
-            // Execute the movement outside of the main lock
-            if (timeToWait > 0) {
-                controlServo.setPower(powerToSet);
-                movementTimer.reset();
-                try {
-                    Thread.sleep(timeToWait);
-                    // Movement completed successfully
-                    lock.lock();
-                    try {
-                        currentPositionDegrees = targetPositionDegrees;
-                    } finally {
-                        lock.unlock();
-                    }
-                } catch (InterruptedException e) {
-                    // Movement was interrupted by StopVelTurning() or a new command
-                    lock.lock();
-                    try {
-                        // Update position to where it actually got
-                        double timeElapsedSec = movementTimer.seconds();
-                        double distanceMoved = timeElapsedSec * velocityForMove * Math.signum(powerToSet) * (isReversed ? -1 : 1);
-                        currentPositionDegrees += distanceMoved;
-                    } finally {
-                        lock.unlock();
-                    }
-                    Thread.currentThread().interrupt(); // Preserve interrupted status
-                } finally {
-                    controlServo.setPower(0);
-                    lock.lock();
-                    try {
-                        // Signal any blocking threads that this movement (or its interruption) is complete
-                        movementFinished.signalAll();
-                    } finally {
-                        lock.unlock();
-                    }
-                }
-            } else {
-                // If no movement was needed, immediately signal completion
-                lock.lock();
-                try {
-                    movementFinished.signalAll();
-                } finally {
-                    lock.unlock();
-                }
+            try {
+                Thread.sleep(updateIntervalMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             }
         }
-    }
-    //</editor-fold>
-
-    //<editor-fold desc="Public Control Methods">
-    @Override
-    public void Init() {
-        lock.lock();
-        try {
-            StopVelTurning();
-            this.currentPositionDegrees = this.initPosition;
-            this.targetPositionDegrees = this.initPosition;
-            this.servoState = initState;
-        } finally {
-            lock.unlock();
-        }
+        // Ensure motor is off on exit
+        controlServo.setPower(0);
     }
 
     @Override
     public void periodic() {
-        // This method is called from an external loop, used here for logging.
-        // The core logic is in the worker thread.
         logger.logDouble(DeviceName + "/estimatedPositionDeg", this.currentPositionDegrees);
+        logger.logString(DeviceName + "/commandedAction", servoState.name());
         logger.logDouble(DeviceName + "/powerApplied", controlServo.getPower());
-        logger.logString(DeviceName + "/currentState", servoState.name());
+    }
+
+    @Override
+    public void Init() {
+        act(initState);
+        servoState = initState;
     }
 
     @Override
@@ -220,29 +178,35 @@ public class NormalCRServo implements ServoEx, PeriodicRunnable, RunnableStructU
         if (!positionAction.containsKey(thisAction)) {
             throw new IllegalArgumentException("Action " + thisAction.name() + " is not defined for " + DeviceName);
         }
-        double targetPos = positionAction.get(thisAction);
-        SetTemporaryPosition(targetPos);
-        servoState = thisAction;
+        lock.lock();
+        try {
+            // Stop any velocity-based movement
+            this.isVelControlRunning = false;
+            double targetPos = positionAction.get(thisAction);
+            this.targetPositionDegrees = targetPos;
+            this.thisActionWaitingSec = (long) ((Math.abs(targetPositionDegrees - currentPositionDegrees) / ServoMaxVel) * 1000.0);
+            this.isPositionMovementActive = true;
+            this.servoState = thisAction;
+
+            logger.logDouble(DeviceName + "/commandedDuration", TimeUnit.MILLISECONDS.toSeconds(thisActionWaitingSec));
+            logger.logDouble(DeviceName + "/commandedPosition", targetPositionDegrees);
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
     public void SetTemporaryPosition(double temporaryPosition) {
-        if (operatingVelocityDegPerSec <= 0) {
-            throw new IllegalStateException("Operating velocity must be set via setVelocity() before moving.");
-        }
         lock.lock();
         try {
-            StopVelTurning(); // Interrupts any ongoing movement
+            this.isVelControlRunning = false;
             this.targetPositionDegrees = temporaryPosition;
-            this.movementDurationMillis = WaitMillSec();
+            this.thisActionWaitingSec = (long) ((Math.abs(targetPositionDegrees - currentPositionDegrees) / ServoMaxVel) * 1000.0);
+            this.isPositionMovementActive = true;
+            this.servoState = InTemporary;
 
-            logger.logDouble(DeviceName + "/commandedTargetPosition", targetPositionDegrees);
-            logger.logDouble(DeviceName + "/commandedVelocity", operatingVelocityDegPerSec);
-            logger.logDouble(DeviceName + "/calculatedDurationMs", movementDurationMillis);
-
-            isMovementRequested = true;
-            servoState = InTemporary;
-            commandReceived.signal(); // Wake up the worker thread
+            logger.logDouble(DeviceName + "/commandedDuration", TimeUnit.MILLISECONDS.toSeconds(thisActionWaitingSec));
+            logger.logDouble(DeviceName + "/commandedPosition", temporaryPosition);
         } finally {
             lock.unlock();
         }
@@ -250,19 +214,26 @@ public class NormalCRServo implements ServoEx, PeriodicRunnable, RunnableStructU
 
     @Override
     public void actWithVel(double DegPerSec) {
-        setVelocity(DegPerSec);
-        // This method starts a movement towards the last set target position with a new velocity.
-        SetTemporaryPosition(this.targetPositionDegrees);
+        lock.lock();
+        try {
+            isPositionMovementActive = false;
+            setVelocity(DegPerSec);
+            logger.logDouble(DeviceName + " " + getConfig(0) + "/commandedVelocity", targetVelocityDegPerSec);
+            isVelControlRunning = true;
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
     public void BlockedActWithVel(double DegPerSec) {
         lock.lock();
         try {
-            setVelocity(DegPerSec);
-            SetTemporaryPosition(this.targetPositionDegrees);
-            // Wait until the worker thread signals that movement is finished
-            movementFinished.await();
+            actWithVel(DegPerSec);
+            // Block until isVelControlRunning is set to false by StopVelTurning()
+            while (isVelControlRunning) {
+                movementFinished.await();
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
@@ -271,31 +242,27 @@ public class NormalCRServo implements ServoEx, PeriodicRunnable, RunnableStructU
     }
 
     @Override
-    public void PatientAct(Action thisAction) throws InterruptedException {
-        long waitTime;
+    public void StopVelTurning() {
         lock.lock();
         try {
-            act(thisAction);
-            waitTime = this.movementDurationMillis;
+            if (isVelControlRunning) {
+                this.isVelControlRunning = false;
+                movementFinished.signalAll(); // Signal blocked calls to wake up
+            }
+            isPositionMovementActive = false;
+            controlServo.setPower(0);
+            logger.logDouble(DeviceName + " " + getConfig(0) + "/commandedVelocity", 0);
         } finally {
             lock.unlock();
-        }
-        // Sleep on the calling thread, separate from the worker
-        if (waitTime > 0) {
-            Thread.sleep(waitTime);
         }
     }
 
     @Override
-    public void StopVelTurning() {
-        lock.lock();
-        try {
-            controlServo.setPower(0);
-            isMovementRequested = false;
-            workerThread.interrupt(); // This will break the Thread.sleep() in the worker
-        } finally {
-            lock.unlock();
-        }
+    public void PatientAct(Action thisAction) throws InterruptedException {
+        act(thisAction);
+        // Sleep on the calling thread for the calculated duration
+        // The actual movement is handled by the background thread
+        TimeUnit.MILLISECONDS.sleep(WaitMillSec());
     }
 
     @Override
@@ -309,7 +276,12 @@ public class NormalCRServo implements ServoEx, PeriodicRunnable, RunnableStructU
             act(switcher.getSwitch1());
         }
     }
-    //</editor-fold>
+
+    @Override
+    public long WaitMillSec() {
+        // Return the duration calculated when the last action was set
+        return thisActionWaitingSec;
+    }
 
     //<editor-fold desc="State and Information Getters">
     @Override
@@ -330,53 +302,38 @@ public class NormalCRServo implements ServoEx, PeriodicRunnable, RunnableStructU
     }
 
     @Override
-    public long WaitMillSec() {
-        if (operatingVelocityDegPerSec <= 0) return 0;
-        // This calculation is now internal and must be done under lock
-        lock.lock();
-        try {
-            return (long) ((Math.abs(targetPositionDegrees - currentPositionDegrees) / operatingVelocityDegPerSec) * 1000.0);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    @Override
     public double getActionPosition(Action target) {
+        if (target == InTemporary) {
+            return targetPositionDegrees;
+        }
         return positionAction.getOrDefault(target, 0.0);
     }
 
     @Override
     public double getServoMaxVel() {
-        return this.maxVelocityDegPerSec;
+        return this.ServoMaxVel;
     }
 
     @Override
     public int getDegRange() {
-        return this.degreeRange;
+        return this.DegRange;
     }
 
     @Override
     public double getVelocity() {
-        return this.operatingVelocityDegPerSec;
+        return this.targetVelocityDegPerSec;
     }
 
     @Override
     public void setVelocity(double degreesPerSecond) {
-        if (degreesPerSecond <= 0) {
-            this.operatingVelocityDegPerSec = -1; // Invalidate velocity
-            StopVelTurning();
-        } else if (degreesPerSecond > maxVelocityDegPerSec) {
-            this.operatingVelocityDegPerSec = maxVelocityDegPerSec;
-        } else {
-            this.operatingVelocityDegPerSec = degreesPerSecond;
-        }
+        this.targetVelocityDegPerSec = Math.min(Math.abs(degreesPerSecond), ServoMaxVel);
     }
 
     @Override
     public HashMap<Action, Double> getNameList() {
         return this.positionAction;
     }
+    //</editor-fold>
 
     @Override
     public void shutdownVelThread() {

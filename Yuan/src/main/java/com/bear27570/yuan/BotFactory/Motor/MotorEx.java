@@ -5,8 +5,9 @@ import androidx.annotation.NonNull;
 import com.bear27570.yuan.BotFactory.Interface.Lockable;
 import com.bear27570.yuan.BotFactory.Interface.PeriodicRunnable;
 import com.bear27570.yuan.BotFactory.Model.Action;
-import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
+import com.bear27570.yuan.BotFactory.Model.MotorInformation;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
+import com.bear27570.yuan.BotFactory.Model.MotorType;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
 import com.bear27570.yuan.BotFactory.ThreadManagement.Task;
 import com.bear27570.yuan.AdvantageCoreLib.Logging.Logger;
@@ -22,7 +23,6 @@ import static com.bear27570.yuan.BotFactory.Model.Action.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -36,16 +36,16 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
     private final String DeviceName;
     private final ArrayList<DcMotorEx> ControlMotor = new ArrayList<>();
     private final int MotorNum;
-    private final ArrayList<ConfigDirectionPair> Config;
+    private final ArrayList<MotorInformation> Config;
     private final HashMap<Action, Double> MotorAction;
-    private final HashMap<Action, Double> PowerAction;
+    private final HashMap<Action, Double> VelocityAction;
     protected static HardwareMap hardwareMap;
     private volatile Action MotorState = Init;
     private final Action InitState;
     private final SwitcherPair switcher;
     private final ReentrantLock lock = new ReentrantLock();
-    private final PriorityBlockingQueue<Task> taskQueue = new PriorityBlockingQueue<>();
     private final boolean isSwitcherAssigned;
+    private final double tick_per_round;
     private final Logger logger;
 
     public boolean tryLock() {
@@ -54,10 +54,6 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
 
     public void lock() {
         lock.lock();
-    }
-
-    public PriorityBlockingQueue<Task> getWaitingQueue() {
-        return taskQueue;
     }
 
     public void unlock() {
@@ -71,11 +67,11 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
      */
     public MotorEx(@NonNull MotorBuilder Builder) {
         this.DeviceName = Builder.deviceName;
+        this.MotorAction = new HashMap<>(Builder.actionMap);
+        this.VelocityAction = new HashMap<>(Builder.powerMap);
+        Config = new ArrayList<>(Builder.MotorName);
         MotorNum = Builder.MotorName.size();
         hardwareMap = Builder.hardwareMap;
-        this.MotorAction = new HashMap<>(Builder.actionMap);
-        this.PowerAction = new HashMap<>(Builder.powerMap);
-        Config = new ArrayList<>(Builder.MotorName);
         for (int i = 0; i < MotorNum; i++) {
             ControlMotor.add(hardwareMap.get(DcMotorEx.class, Config.get(i).getConfig()));
             if (Config.get(i).isReverse()) {
@@ -86,6 +82,8 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
         InitState = Builder.InitState;
         switcher = Builder.switcher;
         this.logger = Logger.getINSTANCE();
+        tick_per_round = Builder.tick_per_round;
+        Init();
     }
     @Override
     public void periodic(){
@@ -164,10 +162,10 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
      * @param powerLimit 功率限制
      */
     public void actWithPowerLimit(Action thisAction, double powerLimit) {
-        lock.lock();
         if (!MotorAction.containsKey(thisAction)) {
             throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
         }
+        lock.lock();
         try {
             for (int i = 0; i < MotorNum; i++) {
                 double targetPosition = MotorAction.get(thisAction);
@@ -218,16 +216,35 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
         }
         MotorState = PowerRunning;
     }
-    public void powerAct(Action act){
+
+    /**
+     * 直接设置转速
+     *
+     * @param velocity 转速(round/sec) 若未设置齿轮比和电机型号，则使用tick/sec
+     */
+    public void setVelocity(double velocity){
         lock.lock();
         try {
-            if (!PowerAction.containsKey(act)) {
+            for (int i = 0; i < MotorNum; i++) {
+                ControlMotor.get(i).setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+                ControlMotor.get(i).setVelocity(velocity*tick_per_round);
+                logger.logDouble(DeviceName+" "+getConfig(i) + "/commandedSetTempVelocity", velocity);
+            }
+        }finally {
+            lock.unlock();
+        }
+        MotorState = VelocityRunning;
+    }
+    public void VelocityAct(Action act){
+        lock.lock();
+        try {
+            if (!VelocityAction.containsKey(act)) {
                 throw new IllegalArgumentException("You used a fucking action that you didn't fucking told me!(｀Д´)");
             }
-            logger.logDouble(DeviceName+" "+getConfig(0)+"/commandedPowerAct",PowerAction.get(act));
+            logger.logDouble(DeviceName+" "+getConfig(0)+"/commandedVelocityAct", VelocityAction.get(act));
             logger.logString(DeviceName+" "+getConfig(0) + "/commandedAction", act.name());
             for (int i = 0; i < MotorNum; i++) {
-                ControlMotor.get(i).setPower(PowerAction.get(act));
+                ControlMotor.get(i).setVelocity(VelocityAction.get(act)*tick_per_round);
             }
             MotorState = act;
         }finally {
@@ -336,30 +353,76 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
      */
     public static class MotorBuilder {
         private String deviceName = null;
-        private ArrayList<ConfigDirectionPair> MotorName = new ArrayList<>();
-        private Map<Action, Double> actionMap;
-        private Map<Action, Double> powerMap;
+        private ArrayList<MotorInformation> MotorName = new ArrayList<>();
+        private final Map<Action, Double> actionMap = new HashMap<>();
+        private final Map<Action, Double> powerMap = new HashMap<>();
         private final HardwareMap hardwareMap;
         private SwitcherPair switcher;
         private final Action InitState;
         private boolean isSwitcherSet, isSinglePIDFSet;
+        private double tick_per_round;
 
-        public MotorBuilder(String ConfigName1, int InitPosition, boolean isReverse, HardwareMap hardwareMap) {
-            this.MotorName.add(new ConfigDirectionPair(ConfigName1, isReverse));
-            this.actionMap = new HashMap<>();
+        public MotorBuilder(String ConfigName1, MotorType type,double GearRatio, int InitPosition, boolean isReverse, HardwareMap hardwareMap) {
+            this.MotorName.add(new MotorInformation(ConfigName1, isReverse));
             this.actionMap.put(Init, (double) InitPosition);
             this.InitState = Init;
             this.hardwareMap = hardwareMap;
+            this.MotorName.add(new MotorInformation(ConfigName1, isReverse));
+            if(type == MotorType.goBILDA){
+                tick_per_round = 28*GearRatio;
+                return;
+            }if(type == MotorType.REV){
+                tick_per_round = 1440;
+            }else {
+                tick_per_round = 1;
+            }
         }
 
-        public MotorBuilder(String ConfigName1, Action InitAct, int InitPosition, boolean isReverse, HardwareMap hardwareMap) {
-            this.MotorName.add(new ConfigDirectionPair(ConfigName1, isReverse));
-            this.actionMap = new HashMap<>();
+        public MotorBuilder(String ConfigName1,MotorType type,double GearRatio, Action InitAct, int InitPosition, boolean isReverse, HardwareMap hardwareMap) {
+            this.MotorName.add(new MotorInformation(ConfigName1, isReverse));
             this.actionMap.put(InitAct, (double) InitPosition);
             this.InitState = InitAct;
             this.hardwareMap = hardwareMap;
+            this.MotorName.add(new MotorInformation(ConfigName1, isReverse));
+            if(type == MotorType.goBILDA){
+                tick_per_round = 28*GearRatio;
+                return;
+            }if(type == MotorType.REV){
+                tick_per_round = 1440;
+            }else {
+                tick_per_round = 1;
+            }
         }
-
+        public MotorBuilder(String ConfigName1,MotorType type,double GearRatio, Action InitAct, int InitPosition, boolean isReverse, HardwareMap hardwareMap, PIDFCoefficients VelPIDF, PIDFCoefficients PosPIDF) {
+            this.MotorName.add(new MotorInformation(ConfigName1, isReverse));
+            this.actionMap.put(InitAct, (double) InitPosition);
+            this.InitState = InitAct;
+            this.hardwareMap = hardwareMap;
+            this.MotorName.add(new MotorInformation(ConfigName1, isReverse));
+            if(type == MotorType.goBILDA){
+                tick_per_round = 28*GearRatio;
+                return;
+            }if(type == MotorType.REV){
+                tick_per_round = 1440;
+            }else {
+                tick_per_round = 1;
+            }
+        }
+        public MotorBuilder(String ConfigName1,MotorType type,double GearRatio, int InitPosition, boolean isReverse, HardwareMap hardwareMap, PIDFCoefficients VelPIDF, PIDFCoefficients PosPIDF) {
+            this.MotorName.add(new MotorInformation(ConfigName1, isReverse));
+            this.actionMap.put(Init, (double) InitPosition);
+            this.InitState = Init;
+            this.hardwareMap = hardwareMap;
+            this.MotorName.add(new MotorInformation(ConfigName1, isReverse));
+            if(type == MotorType.goBILDA){
+                tick_per_round = 28*GearRatio;
+                return;
+            }if(type == MotorType.REV){
+                tick_per_round = 1440;
+            }else {
+                tick_per_round = 1;
+            }
+        }
         /**
          * 设置整个电机组的名称便于Log区分
          */
@@ -376,7 +439,7 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
          * @return 当前Builder实例，实现链式调用
          */
         public MotorBuilder addMotor(String newConfigName, boolean isReverse) {
-            MotorName.add(new ConfigDirectionPair(newConfigName, isReverse));
+            MotorName.add(new MotorInformation(newConfigName, isReverse));
             return this;
         }
 
@@ -389,7 +452,7 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
          * @return 返回当前实例，实现链式调用
          */
         public MotorBuilder addMotorWithPosPIDF(String newConfigName, boolean isReverse, PIDFCoefficients PosPIDF) {
-            MotorName.add(new ConfigDirectionPair(newConfigName, isReverse, PosPIDF, null));
+            MotorName.add(new MotorInformation(newConfigName, isReverse, PosPIDF, null));
             return this;
         }
 
@@ -402,7 +465,7 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
          * @return 返回当前实例，实现链式调用
          */
         public MotorBuilder addMotorWithVelPIDF(String newConfigName, boolean isReverse, PIDFCoefficients VelPIDF) {
-            MotorName.add(new ConfigDirectionPair(newConfigName, isReverse, null, VelPIDF));
+            MotorName.add(new MotorInformation(newConfigName, isReverse, null, VelPIDF));
             return this;
         }
 
@@ -416,7 +479,7 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
          * @return 返回当前实例，实现链式调用
          */
         public MotorBuilder addMotorWithPIDF(String newConfigName, boolean isReverse, PIDFCoefficients PosPIDF, PIDFCoefficients VelPIDF) {
-            MotorName.add(new ConfigDirectionPair(newConfigName, isReverse, PosPIDF, VelPIDF));
+            MotorName.add(new MotorInformation(newConfigName, isReverse, PosPIDF, VelPIDF));
             return this;
         }
 
@@ -431,8 +494,25 @@ public class MotorEx implements RunnableStructUnit, Lockable, PeriodicRunnable {
             actionMap.put(actionType, (double) position);
             return this;
         }
-        public MotorBuilder addPowerAction(Action action, double power){
-            powerMap.put(action, power);
+
+        /**
+         * 设置控制速度的动作
+         * @param action 动作名称
+         * @param Velocity 速度（转/秒）若不设置，则使用tick/sec
+         * @return 当前Builder实例，实现链式调用
+         */
+        public MotorBuilder addVelocityAction(Action action, double Velocity){
+            powerMap.put(action, Velocity);
+            return this;
+        }
+
+        /**
+         * 设置电机转一圈的tick数
+         * @param tick_per_round 转一圈的tick数
+         * @return 当前Builder实例，实现链式调用
+         */
+        public MotorBuilder setTickPerRound(double tick_per_round) {
+            this.tick_per_round = tick_per_round;
             return this;
         }
 

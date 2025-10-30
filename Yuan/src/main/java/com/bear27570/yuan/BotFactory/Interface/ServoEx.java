@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.concurrent.PriorityBlockingQueue;
 
 public interface ServoEx {
-    public PriorityBlockingQueue<Task> getWaitingQueue();
     public boolean tryLock();
     public void lock();
     public void unlock();

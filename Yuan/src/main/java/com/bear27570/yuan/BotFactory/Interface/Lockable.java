@@ -18,6 +18,4 @@ public interface Lockable{
      */
     public void unlock();
     public void act(Action action);
-    public PriorityBlockingQueue<Task> getWaitingQueue();
-
 }

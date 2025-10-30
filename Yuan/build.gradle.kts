@@ -1,4 +1,5 @@
 import java.util.Base64
+
 plugins {
     alias(libs.plugins.android.library)
     id("com.vanniktech.maven.publish") version "0.34.0"
@@ -6,7 +7,7 @@ plugins {
 }
 
 group = "io.github.bear27570"
-version = "1.3.0"
+version = "1.3.2"
 
 android {
     namespace = "com.bear27570.yuan"

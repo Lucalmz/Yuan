@@ -3,11 +3,13 @@ package com.bear27570.yuan.BotFactory.ThreadManagement;
 import com.bear27570.yuan.BotFactory.Interface.Lockable;
 import com.google.firebase.crashlytics.buildtools.reloc.javax.annotation.concurrent.ThreadSafe;
 
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -20,12 +22,13 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 @ThreadSafe
 public class TaskManager {
-    private static final TaskManager INSTANCE = new TaskManager();
+    private static TaskManager INSTANCE;
     // 使用缓存线程池来执行任务，适合处理大量、短暂的突发性任务。
     private final ExecutorService executor;
 
     // 存储当前正在运行的任务，Key为被占用的资源，Value为任务信息。
     private final ConcurrentMap<Lockable, RunningTaskInfo> runningTasks;
+    private final PriorityBlockingQueue<Task> waitingTasks = new PriorityBlockingQueue<>();
 
     // 用于保护任务调度逻辑的全局锁。
     private final ReentrantLock SchedulerLock;
@@ -37,7 +40,10 @@ public class TaskManager {
         this.runningTasks = new ConcurrentHashMap<>();
         this.SchedulerLock = new ReentrantLock();
     }
-    public static TaskManager getInstance(){
+    public static synchronized TaskManager getInstance(){
+        if(INSTANCE==null){
+            INSTANCE = new TaskManager();
+        }
         return INSTANCE;
     }
     /**
@@ -59,14 +65,13 @@ public class TaskManager {
                 case IGNORE:
                     break;
                 case QUEUE:
-                    findConflictSubsystem(task.getRequirements()).getWaitingQueue().add(task);
+                    waitingTasks.add(task);
                     break;
                 case INTERRUPT:
                     // 避免低优先级任务中断高优先级任务（枚举的ordinal值越小，优先级越高）
                     if(conflictTask.task.getPriority().ordinal() > task.getPriority().ordinal()){
                         break;
                     }
-                    clearQueuesFor(conflictTask);
                     conflictTask.future.cancel(true);
                     executeTask(task);
                     break;
@@ -85,15 +90,13 @@ public class TaskManager {
         Runnable taskWrapper = () -> {
             try {
                 task.getRequirements().forEach(Lockable::lock);
-                task.getMainTask().run();
-            } catch (Exception e) {
-                // 如果任务被中断，执行专用的清理逻辑
-                if (e instanceof InterruptedException || e.getCause() instanceof InterruptedException) {
-                    task.getInInterruptCleanUp().run();
-                    Thread.currentThread().interrupt(); // 保持线程的中断状态
-                } else {
-                    throw e;
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException("Task was interrupted while acquiring locks.");
                 }
+                task.getMainTask().run();
+            } catch (InterruptedException e) {
+                task.getInInterruptCleanUp().run();
+                Thread.currentThread().interrupt();
             } finally {
                 task.getRequirements().forEach(Lockable::unlock);
                 onTaskFinished(task);
@@ -140,20 +143,27 @@ public class TaskManager {
         SchedulerLock.lock();
         try {
             finishedTask.getRequirements().forEach(s -> runningTasks.remove(s, findRunningTaskInfoFor(s, finishedTask)));
-
-            // 检查刚被释放的资源，看是否有等待的任务可以启动
-            for (Lockable subsystem : finishedTask.getRequirements()) {
-                if (!subsystem.getWaitingQueue().isEmpty()) {
-                    Task nextTask = subsystem.getWaitingQueue().peek();
-                    if (areAllRequirementsMet(nextTask)) {
-                        subsystem.getWaitingQueue().poll();
-                        submit(nextTask);
-                        break; // 成功启动一个任务后即可退出，防止重复调度
-                    }
-                }
-            }
+            tryToScheduleWaitingTasks();
         }finally {
             SchedulerLock.unlock();
+        }
+    }
+    /**
+     * 遍历整个“等候室”，尝试调度所有现在可以运行的任务。
+     */
+    private void tryToScheduleWaitingTasks() {
+        ArrayList<Task> AvailableTask = new ArrayList<>();
+
+        for (Task waitingTask : waitingTasks) {
+            if (areAllRequirementsMet(waitingTask)) {
+                AvailableTask.add(waitingTask);
+            }
+        }
+        if (!AvailableTask.isEmpty()) {
+            waitingTasks.removeAll(AvailableTask);
+            for (Task taskToRun : AvailableTask) {
+                executeTask(taskToRun);
+            }
         }
     }
 
@@ -169,18 +179,6 @@ public class TaskManager {
             return info;
         }
         return null;
-    }
-
-    /**
-     * 清空指定任务所占用的所有资源的等待队列。
-     * @param taskToClear 将要被中断的任务。
-     */
-    private void clearQueuesFor(RunningTaskInfo taskToClear) {
-        for (Lockable subsystem : taskToClear.task.getRequirements()) {
-            if (!subsystem.getWaitingQueue().isEmpty()) {
-                subsystem.getWaitingQueue().clear();
-            }
-        }
     }
 
     /**

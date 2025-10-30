@@ -5,20 +5,20 @@ import com.qualcomm.robotcore.hardware.PIDFCoefficients;
  * 记录Config和是否反向的共同封装类，用于设置反向
  * 添加记录pidf的信息
  */
-public class ConfigDirectionPair {
+public class MotorInformation {
     private final String Config;
     private final PIDFCoefficients PosPIDF;
     private final PIDFCoefficients VelPIDF;
     private final boolean isReverse;
     //简单创建法
-    public ConfigDirectionPair(String Config,boolean isReverse) {
+    public MotorInformation(String Config, boolean isReverse) {
         this.Config = Config;
         this.isReverse = isReverse;
         this.PosPIDF = null;
         this.VelPIDF = null;
     }
     //带pid的创建
-    public ConfigDirectionPair(String Config,boolean isReverse,PIDFCoefficients PosPIDF,PIDFCoefficients VelPIDF) {
+    public MotorInformation(String Config, boolean isReverse, PIDFCoefficients PosPIDF, PIDFCoefficients VelPIDF) {
         this.Config = Config;
         this.isReverse = isReverse;
         this.PosPIDF = PosPIDF;

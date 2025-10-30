@@ -3,7 +3,7 @@ package com.bear27570.yuan.BotFactory.Servo;
 import static com.bear27570.yuan.BotFactory.Model.Action.Init;
 
 import com.bear27570.yuan.BotFactory.Model.Action;
-import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
+import com.bear27570.yuan.BotFactory.Model.MotorInformation;
 import com.bear27570.yuan.BotFactory.Model.SwitcherPair;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
@@ -14,7 +14,7 @@ import java.util.Map;
 public class ServoBuilders {
     public static class PWMServoBuilder {
         protected String DeviceName;
-        protected final ArrayList<ConfigDirectionPair> servoName = new ArrayList<>();
+        protected final ArrayList<MotorInformation> servoName = new ArrayList<>();
         protected final Map<Action, Double> actionMap;
         protected final Map<Action, Double> velActionMap = new HashMap<>();
         protected final HardwareMap hardwareMap;
@@ -26,7 +26,7 @@ public class ServoBuilders {
         protected boolean isSwitcherSet;
 
         public PWMServoBuilder(String ConfigName1, double InitPosition, boolean isReverse, HardwareMap hardwareMap) {
-            this.servoName.add(new ConfigDirectionPair(ConfigName1, isReverse));
+            this.servoName.add(new MotorInformation(ConfigName1, isReverse));
             this.actionMap = new HashMap<>();
             this.actionMap.put(Init, InitPosition);
             this.InitState = Init;
@@ -34,7 +34,7 @@ public class ServoBuilders {
         }
 
         public PWMServoBuilder(String ConfigName1, Action InitAct, double InitPosition, boolean isReverse, HardwareMap hardwareMap) {
-            this.servoName.add(new ConfigDirectionPair(ConfigName1, isReverse));
+            this.servoName.add(new MotorInformation(ConfigName1, isReverse));
             this.actionMap = new HashMap<>();
             this.actionMap.put(InitAct, InitPosition);
             this.InitState = InitAct;
@@ -70,7 +70,7 @@ public class ServoBuilders {
          * @return 当前Builder实例，实现链式调用
          */
         public PWMServoBuilder addServo(String newConfigName, boolean isReverse) {
-            servoName.add(new ConfigDirectionPair(newConfigName, isReverse));
+            servoName.add(new MotorInformation(newConfigName, isReverse));
             return this;
         }
 
@@ -143,14 +143,11 @@ public class ServoBuilders {
         protected boolean isSwitcherSet = false;
 
         protected final double maxVelocity; // in degrees per second
-        protected final int degreeRange;
 
-        public NormalCRServoBuilder(String servoName, Action initAct, double initPosition, boolean isReversed, int degreeRange, double maxVelocity, HardwareMap hardwareMap) {
+        public NormalCRServoBuilder(String servoName, Action initAct, double initPosition, boolean isReversed, double maxVelocity, HardwareMap hardwareMap) {
             if (maxVelocity <= 0) throw new IllegalArgumentException("Max velocity must be a positive value.");
-
             this.servoName = servoName;
             this.isReversed = isReversed;
-            this.degreeRange = degreeRange;
             this.maxVelocity = maxVelocity;
             this.hardwareMap = hardwareMap;
             this.actionMap = new HashMap<>();

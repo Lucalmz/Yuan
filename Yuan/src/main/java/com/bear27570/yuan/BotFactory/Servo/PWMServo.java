@@ -7,7 +7,7 @@ import com.bear27570.yuan.BotFactory.Interface.Lockable;
 import com.bear27570.yuan.BotFactory.Interface.PeriodicRunnable;
 import com.bear27570.yuan.BotFactory.Interface.ServoEx;
 import com.bear27570.yuan.BotFactory.Model.Action;
-import com.bear27570.yuan.BotFactory.Model.ConfigDirectionPair;
+import com.bear27570.yuan.BotFactory.Model.MotorInformation;
 import com.bear27570.yuan.BotFactory.Interface.RunnableStructUnit;
 import com.bear27570.yuan.BotFactory.Services.ServoVelCalculator;
 import com.bear27570.yuan.BotFactory.Services.TimeServices;
@@ -45,7 +45,7 @@ public class PWMServo implements RunnableStructUnit, Lockable, ServoEx, Periodic
     private volatile double targetVelocityDegPerSec;
     private volatile double targetPosition;
     private volatile double currentPosition;
-    private final ArrayList<ConfigDirectionPair> Config;
+    private final ArrayList<MotorInformation> Config;
     private final HashMap<Action, Double> ServoAction;
     private final HashMap<Action, Double> ServoVelAction;
     private final SwitcherPair switcher;
@@ -60,17 +60,9 @@ public class PWMServo implements RunnableStructUnit, Lockable, ServoEx, Periodic
     //并发用
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition movementFinished = lock.newCondition();
-    private final PriorityBlockingQueue<Task> taskQueue = new PriorityBlockingQueue<>();
     private boolean isSwitcherAssigned = false;
     public Thread workerThread;
     private final Logger logger;
-
-    /**
-     * 获取等待队列
-     */
-    public PriorityBlockingQueue<Task> getWaitingQueue() {
-        return taskQueue;
-    }
 
     /**
      * 提供公用上锁方法
@@ -188,7 +180,6 @@ public class PWMServo implements RunnableStructUnit, Lockable, ServoEx, Periodic
         while (!Thread.currentThread().isInterrupted()) {
             if (isVelControlRunning && targetVelocityDegPerSec != 0) {
                 targetPosition = ServoVelCalculator.getTargetPosition(timer, targetVelocityDegPerSec, currentPosition, DegRange);
-                SetTemporaryPosition(targetPosition);
                 if (targetPosition > 1 || targetPosition < 0) {
                     lock.lock();
                     try {
@@ -199,6 +190,7 @@ public class PWMServo implements RunnableStructUnit, Lockable, ServoEx, Periodic
                         lock.unlock();
                     }
                 }
+                SetTemporaryPosition(targetPosition);
                 currentPosition = targetPosition;
             }
             try {
@@ -257,7 +249,7 @@ public class PWMServo implements RunnableStructUnit, Lockable, ServoEx, Periodic
         }
         lock.lock();
         try {
-            if(ServoVelAction.containsKey(thisAction)) {
+            if(ServoAction.containsKey(thisAction)) {
                 thisActionWaitingSec = TimeServices.GetServoWaitMillSec(thisAction, this);
                 for (int i = 0; i < ServoNum; i++) {
                     ControlServo.get(i).setPosition(ServoAction.get(thisAction).doubleValue());

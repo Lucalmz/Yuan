@@ -213,10 +213,10 @@ public class StructureLink implements Lockable {
     }
 
     public static class StructureBuilder {
-        private ArrayList<RunnableStructUnit>RSU;
-        private ArrayList<Action> ActList;
-        private HashMap<Action, LockableActPair> SafetyCheckList;
-        private ArrayList<Lockable> LockList;
+        private ArrayList<RunnableStructUnit>RSU = new ArrayList<>();
+        private ArrayList<Action> ActList = new ArrayList<>();
+        private HashMap<Action, LockableActPair> SafetyCheckList = new HashMap<>();
+        private ArrayList<Lockable> LockList = new ArrayList<>();
         private SwitcherPair Switcher;
         private Action InitState = Action.Init;
         private boolean switcherIsSet;
@@ -290,7 +290,7 @@ public class StructureLink implements Lockable {
 
         /**
          * 为当前结构添加安全性检查，添加执行动作时结构外的可能对该结构动作产生影响的结构所应处于的位置
-         * Don't use this while safety check will be used in `act`. Do safety check in your code.
+         * Don't use this while safety check will be invoked in `act`. Submit safety check task in your code.
          * @param StructAct   当执行该动作时需要安全检查
          * @param AttachUnit 需要被安全检查的结构单元
          * @param SafeAct     该舵机需要的状态

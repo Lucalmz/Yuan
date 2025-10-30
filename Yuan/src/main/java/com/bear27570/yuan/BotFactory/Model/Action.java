@@ -13,5 +13,5 @@ public enum Action {
     Start,Stop,Ready,Capture,Cross,
     PutDown,Set,Reset,
     Forward,Reverse,Backward,
-    InTemporary,PowerRunning
+    InTemporary,PowerRunning,VelocityRunning
 }

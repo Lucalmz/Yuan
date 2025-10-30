@@ -14,7 +14,7 @@ Stable version :1.2.0
 
 ```groovy
 dependencies {
-    implementation 'io.github.bear27570:Yuan:1.2.0'
+    implementation 'io.github.bear27570:Yuan:1.3.0'
 }
 ```
 
@@ -22,7 +22,7 @@ We have uploaded the code to Maven Central. You only need to add the following d
 
 ```groovy
 dependencies {
-    implementation 'io.github.bear27570:Yuan:1.2.0'
+    implementation 'io.github.bear27570:Yuan:1.3.0'
 }
 ```
 

@@ -8,6 +8,7 @@ import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.LongSupplier;
 
 /**
@@ -21,9 +22,12 @@ import java.util.function.LongSupplier;
  */
 @ThreadSafe
 public class Logger {
-
+    // 用于保护INSTANCE实例化的静态锁
+    private static final ReentrantLock InstanceBuildLock = new ReentrantLock();
     private static Logger INSTANCE = null;
-    private final Object lock = new Object();
+
+    // 用于保护logStream写入的实例锁
+    private final ReentrantLock logStreamLock = new ReentrantLock();
     private DataOutputStream logStream;
     private final LongSupplier timestampSupplier;
 
@@ -35,7 +39,7 @@ public class Logger {
         this.timestampSupplier = timestampSupplier;
         if (!isLoggingEnabled) return;
 
-        // 核心性能优化: 使用BufferedOutputStream来减少实际的磁盘写入次数
+        //使用BufferedOutputStream来减少实际的磁盘写入次数
         this.logStream = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(logFile)));
     }
 
@@ -44,13 +48,14 @@ public class Logger {
      * @param enableLogging 本次运行是否启用日志记录.
      * @param timestampSupplier 提供高精度时间戳的函数, 例如 System::nanoTime.
      */
-    public static synchronized void initialize(boolean enableLogging, LongSupplier timestampSupplier) {
-        if (INSTANCE != null) {
-            System.out.println("Logger is already initialized. Skipping.");
-            return;
-        }
-
+    public static void initialize(boolean enableLogging, LongSupplier timestampSupplier) {
+        InstanceBuildLock.lock();
         try {
+            if (INSTANCE != null) {
+                System.out.println("Logger is already initialized. Skipping.");
+                return;
+            }
+
             // 如果禁用日志，创建一个什么都不做的“哑”实例
             if (!enableLogging) {
                 INSTANCE = new Logger(null, false, null);
@@ -67,6 +72,8 @@ public class Logger {
         } catch (IOException e) {
             // 如果初始化失败，这是个严重问题，直接抛出运行时异常
             throw new RuntimeException("Failed to initialize logger!", e);
+        } finally {
+            InstanceBuildLock.unlock();
         }
     }
 
@@ -74,76 +81,98 @@ public class Logger {
      * 获取Logger的唯一实例.
      */
     public static Logger getINSTANCE() {
-        if (INSTANCE == null) {
-            throw new IllegalStateException("Logger.getInstance() called before initialize(). This is not allowed.");
+        InstanceBuildLock.lock();
+        try {
+            if (INSTANCE == null) {
+                throw new IllegalStateException("Logger.getInstance() called before initialize(). This is not allowed.");
+            }
+            return INSTANCE;
+        } finally {
+            InstanceBuildLock.unlock();
         }
-        return INSTANCE;
     }
 
     public void logDouble(String key, double value) {
         if (!isLoggingEnabled) return;
-        synchronized (lock) {
-            try {
-                logStream.writeByte(0); // Type 0: double
-                logStream.writeLong(timestampSupplier.getAsLong());
-                logStream.writeUTF(key);
-                logStream.writeDouble(value);
-            } catch (IOException e) { e.printStackTrace(); }
+        logStreamLock.lock();
+        try {
+            logStream.writeByte(0); // Type 0: double
+            logStream.writeLong(timestampSupplier.getAsLong());
+            logStream.writeUTF(key);
+            logStream.writeDouble(value);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            logStreamLock.unlock();
         }
     }
 
     public void logBoolean(String key, boolean value) {
         if (!isLoggingEnabled) return;
-        synchronized (lock) {
-            try {
-                logStream.writeByte(1); // Type 1: boolean
-                logStream.writeLong(timestampSupplier.getAsLong());
-                logStream.writeUTF(key);
-                logStream.writeBoolean(value);
-            } catch (IOException e) { e.printStackTrace(); }
+        logStreamLock.lock();
+        try {
+            logStream.writeByte(1); // Type 1: boolean
+            logStream.writeLong(timestampSupplier.getAsLong());
+            logStream.writeUTF(key);
+            logStream.writeBoolean(value);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            logStreamLock.unlock();
         }
     }
 
     public void logString(String key, String value) {
         if (!isLoggingEnabled) return;
-        synchronized (lock) {
-            try {
-                logStream.writeByte(2); // Type 2: String
-                logStream.writeLong(timestampSupplier.getAsLong());
-                logStream.writeUTF(key);
-                logStream.writeUTF(value);
-            } catch (IOException e) { e.printStackTrace(); }
+        logStreamLock.lock();
+        try {
+            logStream.writeByte(2); // Type 2: String
+            logStream.writeLong(timestampSupplier.getAsLong());
+            logStream.writeUTF(key);
+            logStream.writeUTF(value);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            logStreamLock.unlock();
         }
     }
 
-    public void logImage(String key,long timestamp, byte[] value) {
+    public void logImage(String key, long timestamp, byte[] value) {
         if (!isLoggingEnabled) return;
-        synchronized (lock) {
-            try {
-                logStream.writeByte(3); // Type 3: Image
-                logStream.writeLong(timestamp);
-                logStream.writeUTF(key);
-                logStream.writeInt(value.length);
-                logStream.write(value);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        logStreamLock.lock();
+        try {
+            logStream.writeByte(3); // Type 3: Image
+            logStream.writeLong(timestamp);
+            logStream.writeUTF(key);
+            logStream.writeInt(value.length);
+            logStream.write(value);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            logStreamLock.unlock();
         }
     }
+
     /**
      * 关闭logger，释放文件资源。必须在OpMode的stop()中调用！
      */
     public void close() {
         if (!isLoggingEnabled || logStream == null) return;
+        logStreamLock.lock();
         try {
-            synchronized (lock) {
-                logStream.flush(); // 确保缓冲区的所有数据都被写入
-                logStream.close();
+            logStream.flush(); // 确保缓冲区的所有数据都被写入
+            logStream.close();
+            // 在静态锁的保护下重置INSTANCE
+            InstanceBuildLock.lock();
+            try {
+                INSTANCE = null; // 允许下一个OpMode重新初始化
+            } finally {
+                InstanceBuildLock.unlock();
             }
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            INSTANCE = null; // 允许下一个OpMode重新初始化
+            logStreamLock.unlock();
         }
     }
 }
